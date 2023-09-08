@@ -309,7 +309,7 @@ func postMemberHandler(c echo.Context) error {
 	}
 
 	var res Member
-	err = tx.GetContext(c.Request().Context(), &res, "SELECT * FROM `member` WHERE `id` = ?", id)
+	err = tx.GetContext(c.Request().Context(), &res, "SELECT * FROM `member` WHERE `id` = ?", id) //TODO: Getする必要なくね？
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -363,7 +363,7 @@ func getMembersHandler(c echo.Context) error {
 	default:
 		query += "ORDER BY `id` ASC "
 	}
-	query += "LIMIT ? OFFSET ?"
+	query += "LIMIT ? OFFSET ?" //TODO: あー遅そう
 
 	members := []Member{}
 	err = tx.SelectContext(c.Request().Context(), &members, query, memberPageLimit, (page-1)*memberPageLimit)
@@ -545,6 +545,8 @@ func getMemberQRCodeHandler(c echo.Context) error {
 
 	qrFileLock.Lock()
 	defer qrFileLock.Unlock()
+	//TODO: ロックフリーにしたいね
+	//TODO: 一度生成すれば使いまわせる？
 
 	qrCode, err := generateQRCode(id)
 	if err != nil {
@@ -595,14 +597,14 @@ func postBooksHandler(c echo.Context) error {
 		id := generateID()
 
 		_, err := tx.ExecContext(c.Request().Context(),
-			"INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (?, ?, ?, ?, ?)",
+			"INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (?, ?, ?, ?, ?)", //TODO: bulkInsert
 			id, req.Title, req.Author, req.Genre, createdAt)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
 		var record Book
-		err = tx.GetContext(c.Request().Context(), &record, "SELECT * FROM `book` WHERE `id` = ?", id)
+		err = tx.GetContext(c.Request().Context(), &record, "SELECT * FROM `book` WHERE `id` = ?", id) //TODO: だからなんで取り出してるの・・・？そのまま返せばいいじゃん・・・
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -670,7 +672,7 @@ func getBooksHandler(c echo.Context) error {
 	}
 	if title != "" {
 		query += "title COLLATE utf8mb4_bin LIKE ? AND "
-		args = append(args, "%"+title+"%")
+		args = append(args, "%"+title+"%") //TODO: おーやりがいありそう。suffix arrayとか使ってみたい
 	}
 	if author != "" {
 		query += "author COLLATE utf8mb4_bin LIKE ? AND "
@@ -708,7 +710,7 @@ func getBooksHandler(c echo.Context) error {
 	for i, book := range books {
 		res.Books[i].Book = book
 
-		err = tx.GetContext(c.Request().Context(), &Lending{}, "SELECT * FROM `lending` WHERE `book_id` = ?", book.ID)
+		err = tx.GetContext(c.Request().Context(), &Lending{}, "SELECT * FROM `lending` WHERE `book_id` = ?", book.ID) //TODO: IN使え
 		if err == nil {
 			res.Books[i].Lending = true
 		} else if errors.Is(err, sql.ErrNoRows) {
@@ -767,7 +769,7 @@ func getBookHandler(c echo.Context) error {
 	res := GetBookResponse{
 		Book: book,
 	}
-	err = tx.GetContext(c.Request().Context(), &Lending{}, "SELECT * FROM `lending` WHERE `book_id` = ?", id)
+	err = tx.GetContext(c.Request().Context(), &Lending{}, "SELECT * FROM `lending` WHERE `book_id` = ?", id) //TODO: LeftJoinで一回でいけそう
 	if err == nil {
 		res.Lending = true
 	} else if errors.Is(err, sql.ErrNoRows) {
@@ -852,7 +854,7 @@ func postLendingsHandler(c echo.Context) error {
 
 	// 会員の存在確認
 	var member Member
-	err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", req.MemberID)
+	err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", req.MemberID) //TODO: お前Tx内でやる必要なくね
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -862,13 +864,13 @@ func postLendingsHandler(c echo.Context) error {
 	}
 
 	lendingTime := time.Now()
-	due := lendingTime.Add(LendingPeriod * time.Millisecond)
+	due := lendingTime.Add(LendingPeriod * time.Millisecond) //MEMO: created_atから算出できるので持つ必要なさそう？
 	res := make([]PostLendingsResponse, len(req.BookIDs))
 
 	for i, bookID := range req.BookIDs {
 		// 蔵書の存在確認
 		var book Book
-		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", bookID)
+		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", bookID) //TODO: お前もTx内でやる必要ないよね。あとIN使え。
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -890,13 +892,13 @@ func postLendingsHandler(c echo.Context) error {
 
 		// 貸し出し
 		_, err = tx.ExecContext(c.Request().Context(),
-			"INSERT INTO `lending` (`id`, `book_id`, `member_id`, `due`, `created_at`) VALUES (?, ?, ?, ?, ?)",
+			"INSERT INTO `lending` (`id`, `book_id`, `member_id`, `due`, `created_at`) VALUES (?, ?, ?, ?, ?)", //TODO: bulkInsert
 			id, bookID, req.MemberID, due, lendingTime)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 
-		err := tx.GetContext(c.Request().Context(), &res[i], "SELECT * FROM `lending` WHERE `id` = ?", id)
+		err := tx.GetContext(c.Request().Context(), &res[i], "SELECT * FROM `lending` WHERE `id` = ?", id) //TODO: だから必要ないやろお前
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -949,14 +951,14 @@ func getLendingsHandler(c echo.Context) error {
 		res[i].Lending = lending
 
 		var member Member
-		err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", lending.MemberID)
+		err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", lending.MemberID) //TODO: IN使え
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		res[i].MemberName = member.Name
 
 		var book Book
-		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", lending.BookID)
+		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", lending.BookID) //TODO: IN使え
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -1008,7 +1010,7 @@ func returnLendingsHandler(c echo.Context) error {
 		// 貸し出しの存在確認
 		var lending Lending
 		err = tx.GetContext(c.Request().Context(), &lending,
-			"SELECT * FROM `lending` WHERE `member_id` = ? AND `book_id` = ?", req.MemberID, bookID)
+			"SELECT * FROM `lending` WHERE `member_id` = ? AND `book_id` = ?", req.MemberID, bookID) //TODO: 消してみてダメだったらnotFoundを返せばいいので、これいらないはず
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return echo.NewHTTPError(http.StatusNotFound, err.Error())
