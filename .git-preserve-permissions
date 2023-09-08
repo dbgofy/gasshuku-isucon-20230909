@@ -24,6 +24,7 @@
 0644:0:0:files/vimrc
 0750:1001:1001:home/isucon
 0755:0:0:home
+0644:1001:1001:home/isucon/.bashrc
 0644:0:0:home/isucon/.bashrc.backup
 0700:0:0:root/.ssh
 0700:0:0:root
