@@ -99,6 +99,11 @@
 0775:1000:1000:home/isucon/gasshuku-isucon/webapp/go
 0775:1000:1000:home/isucon/gasshuku-isucon/webapp
 0664:1000:1000:home/isucon/gasshuku-isucon/webapp/go/main.go
+0775:1000:1000:home/isucon/gasshuku-isucon/webapp/sql
+0664:1000:1000:home/isucon/gasshuku-isucon/webapp/sql/.gitignore
+0664:1000:1000:home/isucon/gasshuku-isucon/webapp/sql/0_schema.sql
+0664:1000:1000:home/isucon/gasshuku-isucon/webapp/sql/1_data.sql
+0664:1000:1000:home/isucon/gasshuku-isucon/webapp/sql/init_db.sh
 0700:0:0:root/.ssh
 0700:0:0:root
 0600:0:0:root/.ssh/authorized_keys
