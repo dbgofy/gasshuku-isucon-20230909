@@ -17,3 +17,13 @@
 /home/isucon/*
 !/home/isucon/.bashrc
 
+# /home/isucon/gasshuku-isucon/Makefile
+/*
+!/home
+/home/*
+!/home/isucon
+/home/isucon/*
+!/home/isucon/gasshuku-isucon
+/home/isucon/gasshuku-isucon/*
+!/home/isucon/gasshuku-isucon/Makefile
+
