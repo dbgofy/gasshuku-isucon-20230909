@@ -31,6 +31,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/uptrace-go/uptrace"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -288,41 +289,57 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "key must be 16 characters")
 	}
 
-	cmd := exec.CommandContext(c.Request().Context(), "bash", "../sql/init_db.sh")
-	cmd.Env = os.Environ()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
+	g, ctx := errgroup.WithContext(c.Request().Context())
 
-	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
+	g.Go(func() error {
+		cmd := exec.CommandContext(ctx, "bash", "../sql/init_db.sh")
+		cmd.Env = os.Environ()
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		return err
+	})
 
-	block, err = aes.NewCipher([]byte(req.Key))
-	if err != nil {
-		log.Panic(err.Error())
-	}
+	g.Go(func() error {
+		_, err := db.ExecContext(c.Request().Context(), "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
+		return err
+	})
 
-	var total int32
-	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	notBannedMemberNum.Store(total)
+	g.Go(func() error {
+		var err error
+		block, err = aes.NewCipher([]byte(req.Key))
+		if err != nil {
+			log.Panic(err.Error())
+		}
+		return nil
+	})
 
-	var genreCounts []genreCount
-	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
-	if err != nil {
+	g.Go(func() error {
+		var total int32
+		err := db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+		if err != nil {
+			return err
+		}
+		notBannedMemberNum.Store(total)
+		return nil
+	})
+
+	g.Go(func() error {
+		var genreCounts []genreCount
+		err := db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+		if err != nil {
+			return err
+		}
+		bookByGenreCache = make([]*atomic.Int64, 10)
+		for _, genreCount := range genreCounts {
+			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	bookByGenreCache = make([]*atomic.Int64, 10)
-	for _, genreCount := range genreCounts {
-		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
-		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
 	}
 
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
