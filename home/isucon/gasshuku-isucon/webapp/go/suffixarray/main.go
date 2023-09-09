@@ -8,7 +8,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"golang.org/x/sync/errgroup"
 )
 
 type suffix struct {
@@ -41,53 +40,34 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	size := 50000
+	size := 3000
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		for j, book := range books {
-			title := []rune(book.Title)
-			for i := 0; i < len(title); i++ {
-				titles = append(titles, suffix{book.ID, string(title[i:])})
-				if len(titles)%size == 0 {
-					if err := insert(ctx, db, "title", titles); err != nil {
-						return err
-					}
-					titles = make([]suffix, 0, size)
-				}
-			}
-			if j%(len(books)/100) == 0 {
-				log.Printf("title %d%% (%d/%d)\n", j*100/len(books), j, len(books))
-			}
+	for j, book := range books {
+		title := []rune(book.Title)
+		for i := 0; i < len(title); i++ {
+			titles = append(titles, suffix{book.ID, string(title[i:])})
 		}
-		return insert(ctx, db, "title", titles)
-	})
-
-	g.Go(func() error {
-		for j, book := range books {
-			author := []rune(book.Author)
-			for i := 0; i < len(author); i++ {
-				authors = append(authors, suffix{book.ID, string(author[i:])})
-				if len(authors)%size == 0 {
-					if err := insert(ctx, db, "author", authors); err != nil {
-						return err
-					}
-					authors = make([]suffix, 0, size)
-				}
-			}
-			if j%(len(books)/100) == 0 {
-				log.Printf("author %d%% (%d/%d)\n", j*100/len(books), j, len(books))
-			}
+		if len(titles)%size == 0 {
+			insert(ctx, db, "title", titles)
+			titles = make([]suffix, 0, size)
 		}
-		return insert(ctx, db, "author", authors)
-	})
 
-	if err := g.Wait(); err != nil {
-		log.Fatalln(err)
+		author := []rune(book.Author)
+		for i := 0; i < len(author); i++ {
+			authors = append(authors, suffix{book.ID, string(author[i:])})
+		}
+		if len(authors)%size == 0 {
+			insert(ctx, db, "author", authors)
+			authors = make([]suffix, 0, size)
+		}
+
+		if j%(len(books)/100) == 0 {
+			log.Printf("books %d%% (%d/%d)\n", j*100/len(books), j, len(books))
+		}
 	}
+	insert(ctx, db, "title", titles)
+	insert(ctx, db, "author", authors)
 }
 
 func insert(ctx context.Context, db *sqlx.DB, column string, values []suffix) error {
