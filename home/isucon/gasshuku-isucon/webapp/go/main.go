@@ -353,7 +353,7 @@ func getMembersHandler(c echo.Context) error {
 
 	var lastMemberName string
 	if lastMemberID != "" && (order == "name_asc" || order == "name_desc") {
-		err = db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		err = db.GetContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
