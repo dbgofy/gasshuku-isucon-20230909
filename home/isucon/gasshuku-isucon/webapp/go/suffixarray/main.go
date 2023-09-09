@@ -69,7 +69,7 @@ func main() {
 
 func insert(ctx context.Context, db *sqlx.DB, column string, values []map[string]interface{}) error {
 	query := "INSERT INTO `book_" + column + "_suffix` (`book_id`, `" + column + "_suffix`) VALUES (:book_id , :" + column + "_suffix)"
-	log.Println(query)
+	log.Println(query, values[0])
 	_, err := db.NamedExecContext(ctx, query, values)
 	if err != nil {
 		return fmt.Errorf("insert %s: %w", column, err)
