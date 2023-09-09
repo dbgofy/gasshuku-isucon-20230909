@@ -65,6 +65,9 @@ func main() {
 
 	e := echo.New()
 	e.Debug = true
+	e.Use(middleware.TimeoutWithConfig(middleware.TimeoutConfig{
+		Timeout: 300 * time.Second,
+	}))
 	e.Use(middleware.Logger())
 	e.Use(otelecho.Middleware("dev-1"))
 
