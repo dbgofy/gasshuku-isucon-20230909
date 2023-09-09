@@ -118,4 +118,4 @@ fi
 alias git="sudo git"
 
 [[ -s "/home/isucon/.gvm/scripts/gvm" ]] && source "/home/isucon/.gvm/scripts/gvm"
-export UPTRACE_DSN='http://project2_secret_token@localhost:14318/2'
+export UPTRACE_DSN='http://project2_secret_token@10.10.4.10:14318/2'
