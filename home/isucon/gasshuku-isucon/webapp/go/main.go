@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -187,8 +188,11 @@ func getEnvOrDefault(key string, defaultValue string) string {
 }
 
 var (
-	block      cipher.Block
-	qrFileLock sync.Mutex
+	block              cipher.Block
+	qrFileLock         sync.Mutex
+	notBannedMemberNum atomic.Int32
+
+	bookByGenreCache []*atomic.Int64
 )
 
 // AES + CTRモード + base64エンコードでテキストを暗号化
@@ -215,15 +219,23 @@ func decrypt(cipherText string) (string, error) {
 	return string(decryptedText), nil
 }
 
-const qrCodeFileName = "../images/qr.png"
-
 // QRコードを生成
 func generateQRCode(id string) ([]byte, error) {
+	qrCodeFileName := fmt.Sprintf("../images/%s.png", id)
+	file, err := os.Open(qrCodeFileName)
+	if err == nil {
+		defer file.Close()
+		return io.ReadAll(file)
+	}
+
 	encryptedID, err := encrypt(id)
 	if err != nil {
 		return nil, err
 	}
 
+	qrFileLock.Lock()
+	defer qrFileLock.Unlock()
+	//TODO: 一旦直前でlockするようにする
 	/*
 		生成するQRコードの仕様
 		 - PNGフォーマット
@@ -238,7 +250,7 @@ func generateQRCode(id string) ([]byte, error) {
 		return nil, err
 	}
 
-	file, err := os.Open(qrCodeFileName)
+	file, err = os.Open(qrCodeFileName)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +271,11 @@ type InitializeHandlerRequest struct {
 
 type InitializeHandlerResponse struct {
 	Language string `json:"language"`
+}
+
+type genreCount struct {
+	Genre Genre `db:"genre"`
+	Count int64 `db:"c"`
 }
 
 // 初期化用ハンドラ
@@ -287,6 +304,24 @@ func initializeHandler(c echo.Context) error {
 	block, err = aes.NewCipher([]byte(req.Key))
 	if err != nil {
 		log.Panic(err.Error())
+	}
+
+	var total int32
+	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	notBannedMemberNum.Store(total)
+
+	var genreCounts []genreCount
+	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	bookByGenreCache = make([]*atomic.Int64, 10)
+	for _, genreCount := range genreCounts {
+		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
 	}
 
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
@@ -318,28 +353,21 @@ func postMemberHandler(c echo.Context) error {
 
 	id := generateID()
 
-	tx, err := db.BeginTxx(c.Request().Context(), nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	res := Member{
+		ID:          id,
+		Name:        req.Name,
+		Address:     req.Address,
+		PhoneNumber: req.PhoneNumber,
+		Banned:      false,
+		CreatedAt:   time.Now(),
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	_, err = tx.ExecContext(c.Request().Context(),
+	_, err := db.ExecContext(c.Request().Context(),
 		"INSERT INTO `member` (`id`, `name`, `address`, `phone_number`, `banned`, `created_at`) VALUES (?, ?, ?, ?, false, ?)",
-		id, req.Name, req.Address, req.PhoneNumber, time.Now())
+		res.ID, res.Name, res.Address, res.PhoneNumber, res.CreatedAt)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	var res Member
-	err = tx.GetContext(c.Request().Context(), &res, "SELECT * FROM `member` WHERE `id` = ?", id) //TODO: Getする必要なくね？
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	_ = tx.Commit()
+	notBannedMemberNum.Add(1)
 
 	return c.JSON(http.StatusCreated, res)
 }
@@ -353,45 +381,56 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
-	pageStr := c.QueryParam("page")
-	if pageStr == "" {
-		pageStr = "1"
-	}
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
+	var err error
 
-	// 前ページの最後の会員ID
-	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
-	_ = c.QueryParam("last_member_id")
+	lastMemberID := c.QueryParam("last_member_id")
 
 	order := c.QueryParam("order")
 	if order != "" && order != "name_asc" && order != "name_desc" {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid order")
 	}
 
-	tx, err := db.BeginTxx(c.Request().Context(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	var lastMemberName string
+	if lastMemberID != "" && (order == "name_asc" || order == "name_desc") {
+		err = db.GetContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
 
 	query := "SELECT * FROM `member` WHERE `banned` = false "
+	var filterString string
 	switch order {
 	case "name_asc":
-		query += "ORDER BY `name` ASC "
+		filterString = lastMemberName
+		if filterString == "" {
+			query += "ORDER BY `name` ASC "
+		} else {
+			query += "AND `name` > ? ORDER BY `name` ASC "
+		}
 	case "name_desc":
-		query += "ORDER BY `name` DESC "
+		filterString = lastMemberName
+		if filterString == "" {
+			query += "ORDER BY `name` DESC "
+		} else {
+			query += "AND `name` < ? ORDER BY `name` DESC "
+		}
 	default:
-		query += "ORDER BY `id` ASC "
+		filterString = lastMemberID
+		if filterString == "" {
+			query += "ORDER BY `id` ASC "
+		} else {
+			query += "AND `id` > ? ORDER BY `id` ASC "
+		}
 	}
-	query += "LIMIT ? OFFSET ?" //TODO: あー遅そう
+	query += "LIMIT ?"
 
 	members := []Member{}
-	err = tx.SelectContext(c.Request().Context(), &members, query, memberPageLimit, (page-1)*memberPageLimit)
+	if filterString == "" {
+		err = db.SelectContext(c.Request().Context(), &members, query, memberPageLimit)
+	} else {
+		err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -399,17 +438,9 @@ func getMembersHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "no members to show in this page")
 	}
 
-	var total int
-	err = tx.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	_ = tx.Commit()
-
 	return c.JSON(http.StatusOK, GetMembersResponse{
 		Members: members,
-		Total:   total,
+		Total:   int(notBannedMemberNum.Load()),
 	})
 }
 
@@ -546,6 +577,7 @@ func banMemberHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	notBannedMemberNum.Add(-1)
 	_ = tx.Commit()
 
 	return c.NoContent(http.StatusNoContent)
@@ -567,11 +599,6 @@ func getMemberQRCodeHandler(c echo.Context) error {
 
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	qrFileLock.Lock()
-	defer qrFileLock.Unlock()
-	//TODO: ロックフリーにしたいね
-	//TODO: 一度生成すれば使いまわせる？
 
 	qrCode, err := generateQRCode(id)
 	if err != nil {
@@ -636,6 +663,9 @@ func postBooksHandler(c echo.Context) error {
 
 		res = append(res, record)
 	}
+	for _, req := range reqSlice {
+		bookByGenreCache[req.Genre].Add(1)
+	}
 
 	_ = tx.Commit()
 
@@ -672,14 +702,6 @@ func getBooksHandler(c echo.Context) error {
 	if pageStr == "" {
 		pageStr = "1"
 	}
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
-	// 前ページの最後の蔵書ID
-	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
-	_ = c.QueryParam("last_book_id")
 
 	tx, err := db.BeginTxx(c.Request().Context(), nil)
 	if err != nil {
@@ -706,18 +728,31 @@ func getBooksHandler(c echo.Context) error {
 	query = strings.TrimSuffix(query, "AND ")
 
 	var total int
-	err = tx.GetContext(c.Request().Context(), &total, query, args...)
-	if err != nil {
-		c.Logger().Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	if genre != "" && title == "" && author == "" {
+		genreInt, err := strconv.Atoi(genre)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		total = int(bookByGenreCache[Genre(genreInt)].Load())
+	} else {
+		err = tx.GetContext(c.Request().Context(), &total, query, args...)
+		if err != nil {
+			c.Logger().Error(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
 	if total == 0 {
 		return echo.NewHTTPError(http.StatusNotFound, "no books found")
 	}
 
 	query = strings.ReplaceAll(query, "COUNT(*)", "*")
-	query += "ORDER BY `id` ASC LIMIT ? OFFSET ?"
-	args = append(args, bookPageLimit, (page-1)*bookPageLimit)
+	lastBookID := c.QueryParam("last_book_id")
+	if lastBookID != "" {
+		query += "AND `id` > ? "
+		args = append(args, lastBookID)
+	}
+	query += "ORDER BY `id` ASC LIMIT ? "
+	args = append(args, bookPageLimit)
 
 	var books []Book
 	err = tx.SelectContext(c.Request().Context(), &books, query, args...)
@@ -732,16 +767,33 @@ func getBooksHandler(c echo.Context) error {
 		Books: make([]GetBookResponse, len(books)),
 		Total: total,
 	}
+	bookIDs := make([]string, 0, len(books))
+	for _, book := range books {
+		bookIDs = append(bookIDs, book.ID)
+	}
+	query, args, err = sqlx.In("SELECT book_id FROM `lending` WHERE `book_id` IN (?)", bookIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	query = db.Rebind(query)
+
+	var lendingBookIDs []string
+	err = tx.SelectContext(c.Request().Context(), &lendingBookIDs, query, args...)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	resBookIDsMap := make(map[string]struct{}, len(lendingBookIDs))
+	for _, resBookID := range lendingBookIDs {
+		resBookIDsMap[resBookID] = struct{}{}
+	}
 	for i, book := range books {
 		res.Books[i].Book = book
 
-		err = tx.GetContext(c.Request().Context(), &Lending{}, "SELECT * FROM `lending` WHERE `book_id` = ?", book.ID) //TODO: IN使え
-		if err == nil {
+		_, ok := resBookIDsMap[book.ID]
+		if ok {
 			res.Books[i].Lending = true
-		} else if errors.Is(err, sql.ErrNoRows) {
-			res.Books[i].Lending = false
 		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			res.Books[i].Lending = false
 		}
 	}
 
@@ -824,9 +876,6 @@ func getBookQRCodeHandler(c echo.Context) error {
 
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	qrFileLock.Lock()
-	defer qrFileLock.Unlock()
 
 	qrCode, err := generateQRCode(id)
 	if err != nil {
@@ -943,54 +992,58 @@ type GetLendingsResponse struct {
 	BookTitle  string `json:"book_title"`
 }
 
+type GetLendingsHandlerQuery struct {
+	ID         string    `db:"lending_id"`
+	MemberID   string    `db:"member_id"`
+	BookID     string    `db:"book_id"`
+	Due        time.Time `db:"due"`
+	CreatedAt  time.Time `db:"created_at"`
+	MemberName string    `db:"member_name"`
+	BookTitle  string    `db:"book_title"`
+}
+
 func getLendingsHandler(c echo.Context) error {
 	overDue := c.QueryParam("over_due")
 	if overDue != "" && overDue != "true" && overDue != "false" {
 		return echo.NewHTTPError(http.StatusBadRequest, "over_due must be boolean value")
 	}
 
-	tx, err := db.BeginTxx(c.Request().Context(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	query := "SELECT * FROM `lending`"
+	query := "SELECT " +
+		"`lending`.`id` as `lending_id`, " +
+		"`lending`.`member_id` as `member_id`, " +
+		"`lending`.`book_id` as `book_id`, " +
+		"`lending`.`due` as `due`, " +
+		"`lending`.`created_at` as `created_at`, " +
+		"`member`.`name` as `member_name`, " +
+		"`book`.`title` as `book_title` " +
+		" FROM `lending` INNER JOIN `member` ON `lending`.`member_id` = `member`.`id` INNER JOIN `book` ON `lending`.`book_id` = `book`.`id` "
 	args := []any{}
 	if overDue == "true" {
 		query += " WHERE `due` > ?"
 		args = append(args, time.Now())
 	}
-	query += " ORDER BY `id` ASC"
+	query += " ORDER BY `lending`.`id` ASC"
 
-	var lendings []Lending
-	err = tx.SelectContext(c.Request().Context(), &lendings, query, args...)
+	var lendings []GetLendingsHandlerQuery
+	err := db.SelectContext(c.Request().Context(), &lendings, query, args...)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	res := make([]GetLendingsResponse, len(lendings))
 	for i, lending := range lendings {
-		res[i].Lending = lending
-
-		var member Member
-		err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", lending.MemberID) //TODO: IN使え
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		res[i] = GetLendingsResponse{
+			Lending: Lending{
+				ID:        lending.ID,
+				MemberID:  lending.MemberID,
+				BookID:    lending.BookID,
+				Due:       lending.Due,
+				CreatedAt: lending.CreatedAt,
+			},
+			MemberName: lending.MemberName,
+			BookTitle:  lending.BookTitle,
 		}
-		res[i].MemberName = member.Name
-
-		var book Book
-		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", lending.BookID) //TODO: IN使え
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-		res[i].BookTitle = book.Title
 	}
-
-	_ = tx.Commit()
 
 	return c.JSON(http.StatusOK, res)
 }
