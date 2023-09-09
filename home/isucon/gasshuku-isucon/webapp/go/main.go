@@ -950,54 +950,58 @@ type GetLendingsResponse struct {
 	BookTitle  string `json:"book_title"`
 }
 
+type GetLendingsHandlerQuery struct {
+	ID         string    `db:"lending_id"`
+	MemberID   string    `db:"member_id"`
+	BookID     string    `db:"book_id"`
+	Due        time.Time `db:"due"`
+	CreatedAt  time.Time `db:"created_at"`
+	MemberName string    `db:"member_name"`
+	BookTitle  string    `db:"book_title"`
+}
+
 func getLendingsHandler(c echo.Context) error {
 	overDue := c.QueryParam("over_due")
 	if overDue != "" && overDue != "true" && overDue != "false" {
 		return echo.NewHTTPError(http.StatusBadRequest, "over_due must be boolean value")
 	}
 
-	tx, err := db.BeginTxx(c.Request().Context(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	query := "SELECT * FROM `lending`"
+	query := "SELECT " +
+		"`lending`.`id` as `lending_id` " +
+		"`lending`.`member_id` as `member_id` " +
+		"`lending`.`book_id` as `book_id` " +
+		"`lending`.`due` as `due` " +
+		"`lending`.`created_at` as `created_at` " +
+		"`member`.`name` as `member_name` " +
+		"`book`.`title` as `book_title` " +
+		" FROM `lending` INNER JOIN `member` ON `lending`.`member_id` = `member`.`id` INNER JOIN `book` ON `lending`.`book_id` = `book`.`id` "
 	args := []any{}
 	if overDue == "true" {
 		query += " WHERE `due` > ?"
 		args = append(args, time.Now())
 	}
-	query += " ORDER BY `id` ASC"
+	query += " ORDER BY `lending`.`id` ASC"
 
-	var lendings []Lending
-	err = tx.SelectContext(c.Request().Context(), &lendings, query, args...)
+	var lendings []GetLendingsHandlerQuery
+	err := db.SelectContext(c.Request().Context(), &lendings, query, args...)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	res := make([]GetLendingsResponse, len(lendings))
 	for i, lending := range lendings {
-		res[i].Lending = lending
-
-		var member Member
-		err = tx.GetContext(c.Request().Context(), &member, "SELECT * FROM `member` WHERE `id` = ?", lending.MemberID) //TODO: IN使え
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		res[i] = GetLendingsResponse{
+			Lending: Lending{
+				ID:        lending.ID,
+				MemberID:  lending.MemberID,
+				BookID:    lending.BookID,
+				Due:       lending.Due,
+				CreatedAt: lending.CreatedAt,
+			},
+			MemberName: lending.MemberName,
+			BookTitle:  lending.BookTitle,
 		}
-		res[i].MemberName = member.Name
-
-		var book Book
-		err = tx.GetContext(c.Request().Context(), &book, "SELECT * FROM `book` WHERE `id` = ?", lending.BookID) //TODO: IN使え
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-		res[i].BookTitle = book.Title
 	}
-
-	_ = tx.Commit()
 
 	return c.JSON(http.StatusOK, res)
 }
