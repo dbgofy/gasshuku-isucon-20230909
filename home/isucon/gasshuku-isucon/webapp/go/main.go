@@ -313,28 +313,20 @@ func postMemberHandler(c echo.Context) error {
 
 	id := generateID()
 
-	tx, err := db.BeginTxx(c.Request().Context(), nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	res := Member{
+		ID:          id,
+		Name:        req.Name,
+		Address:     req.Address,
+		PhoneNumber: req.PhoneNumber,
+		Banned:      false,
+		CreatedAt:   time.Now(),
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	_, err = tx.ExecContext(c.Request().Context(),
+	_, err := db.ExecContext(c.Request().Context(),
 		"INSERT INTO `member` (`id`, `name`, `address`, `phone_number`, `banned`, `created_at`) VALUES (?, ?, ?, ?, false, ?)",
-		id, req.Name, req.Address, req.PhoneNumber, time.Now())
+		res.ID, res.Name, res.Address, res.PhoneNumber, res.CreatedAt)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	var res Member
-	err = tx.GetContext(c.Request().Context(), &res, "SELECT * FROM `member` WHERE `id` = ?", id) //TODO: Getする必要なくね？
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	_ = tx.Commit()
 
 	return c.JSON(http.StatusCreated, res)
 }
