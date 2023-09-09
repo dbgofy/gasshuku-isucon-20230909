@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,14 +30,25 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
-	"github.com/uptrace/opentelemetry-go-extra/otelplay"
+	"github.com/uptrace/uptrace-go/uptrace"
 )
 
 func main() {
 	ctx := context.Background()
 
-	shutdown := otelplay.ConfigureOpentelemetry(ctx)
-	defer shutdown()
+	var revision string
+	{
+		info, _ := debug.ReadBuildInfo()
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				revision = s.Value
+			}
+		}
+		uptrace.ConfigureOpentelemetry(
+			uptrace.WithServiceName("webapp:" + revision),
+		)
+		defer uptrace.Shutdown(ctx)
+	}
 
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
@@ -46,7 +58,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
+	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemKey.String("mysql:"+revision)))
 	if err != nil {
 		log.Panic(err)
 	}

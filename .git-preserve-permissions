@@ -32,7 +32,7 @@
 0644:1001:1001:home/isucon/.bashrc
 0644:0:0:home/isucon/.bashrc.backup
 0775:1001:1000:home/isucon/gasshuku-isucon
-0644:1001:0:home/isucon/gasshuku-isucon/Makefile
+0644:0:0:home/isucon/gasshuku-isucon/Makefile
 0775:1001:1000:home/isucon/gasshuku-isucon/bench/action
 0775:1001:1000:home/isucon/gasshuku-isucon/bench
 0664:1001:1000:home/isucon/gasshuku-isucon/bench/action/action.go
@@ -104,7 +104,7 @@
 0775:1001:1000:home/isucon/gasshuku-isucon/webapp
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/go/go.mod
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/go/go.sum
-0644:1001:1000:home/isucon/gasshuku-isucon/webapp/go/main.go
+0644:0:0:home/isucon/gasshuku-isucon/webapp/go/main.go
 0755:1001:1000:home/isucon/gasshuku-isucon/webapp/sql
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/.gitignore
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/0_schema.sql
