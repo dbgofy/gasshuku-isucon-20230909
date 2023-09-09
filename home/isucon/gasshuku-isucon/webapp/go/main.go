@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"io"
 	"log"
 	"net/http"
@@ -54,6 +55,7 @@ func main() {
 	e := echo.New()
 	e.Debug = true
 	e.Use(middleware.Logger())
+	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
