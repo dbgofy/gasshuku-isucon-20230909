@@ -18,6 +18,12 @@ go-gen:
 run-go:
 	cd webapp/go && go run *.go
 
+.PHONY: logrotate
+logrotate:
+	mysqldumpslow -s t - < /var/log/mysql/mysql-slow.log > mysqldumpslow.log
+	cp /var/log/mysql/mysql-slow.log /var/log/mysql/mysql-slow.log.bak
+	> /var/log/mysql/mysql-slow.log
+
 .PHONY: run-bench
 run-bench:
 	cd bench && go run main.go >/dev/null
