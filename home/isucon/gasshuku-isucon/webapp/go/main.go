@@ -9,6 +9,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"log"
 	"net/http"
@@ -21,12 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/uptrace/opentelemetry-go-extra/otelsql"
-	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -38,17 +36,16 @@ import (
 func main() {
 	ctx := context.Background()
 
-	var revision string
 	{
 		info, _ := debug.ReadBuildInfo()
+		var revision string
 		for _, s := range info.Settings {
 			if s.Key == "vcs.revision" {
 				revision = s.Value
 			}
 		}
 		uptrace.ConfigureOpentelemetry(
-			uptrace.WithServiceName("webapp"),
-			uptrace.WithServiceVersion(revision),
+			uptrace.WithServiceName("webapp:" + revision),
 		)
 		defer uptrace.Shutdown(ctx)
 	}
@@ -61,11 +58,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = otelsqlx.Open(
-		"mysql",
-		dsn,
-		otelsql.WithAttributes(semconv.DBSystemMySQL, attribute.String("service.version", revision)),
-	)
+	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
 	if err != nil {
 		log.Panic(err)
 	}
