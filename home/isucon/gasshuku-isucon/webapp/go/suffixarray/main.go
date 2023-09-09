@@ -63,7 +63,7 @@ func main() {
 		}
 
 		if j%(len(books)/100) == 0 {
-			log.Printf("books %d%% (%d/%d)\n", j%(len(books)/100), j, len(books))
+			log.Printf("books %d%% (%d/%d)\n", j*100/len(books), j, len(books))
 		}
 	}
 	insert(ctx, db, "title", titles)
