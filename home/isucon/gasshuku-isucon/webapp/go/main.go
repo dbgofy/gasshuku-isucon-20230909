@@ -638,6 +638,16 @@ type PostBooksRequest struct {
 	Genre  Genre  `json:"genre"`
 }
 
+type bookTitleSuffix struct {
+	BookID      string `db:"book_id"`
+	TitleSuffix string `db:"title_suffix"`
+}
+
+type bookAuthorSuffix struct {
+	BookID       string `db:"book_id"`
+	AuthorSuffix string `db:"author_suffix"`
+}
+
 // 蔵書を登録 (複数札を一気に登録)
 func postBooksHandler(c echo.Context) error {
 	var reqSlice []PostBooksRequest
@@ -645,17 +655,9 @@ func postBooksHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	res := []Book{}
 	createdAt := time.Now()
 
-	tx, err := db.BeginTxx(c.Request().Context(), nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
+	books := make([]Book, 0, len(reqSlice))
 	for _, req := range reqSlice {
 		if req.Title == "" || req.Author == "" {
 			return echo.NewHTTPError(http.StatusBadRequest, "title, author is required")
@@ -663,31 +665,61 @@ func postBooksHandler(c echo.Context) error {
 		if req.Genre < 0 || req.Genre > 9 {
 			return echo.NewHTTPError(http.StatusBadRequest, "genre is invalid")
 		}
-
-		id := generateID()
-
-		_, err := tx.ExecContext(c.Request().Context(),
-			"INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (?, ?, ?, ?, ?)", //TODO: bulkInsert
-			id, req.Title, req.Author, req.Genre, createdAt)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-
-		var record Book
-		err = tx.GetContext(c.Request().Context(), &record, "SELECT * FROM `book` WHERE `id` = ?", id) //TODO: だからなんで取り出してるの・・・？そのまま返せばいいじゃん・・・
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-
-		res = append(res, record)
+		books = append(books, Book{
+			ID:        generateID(),
+			Title:     req.Title,
+			Author:    req.Author,
+			Genre:     req.Genre,
+			CreatedAt: createdAt,
+		})
 	}
+
+	bookTitleSuffixes := make([]bookTitleSuffix, 0, len(books))
+	bookAuthorSuffixes := make([]bookAuthorSuffix, 0, len(books))
+	for _, book := range books {
+		title := []rune(book.Title)
+		for i := 0; i < len(title); i++ {
+			bookTitleSuffixes = append(bookTitleSuffixes, bookTitleSuffix{
+				BookID:      book.ID,
+				TitleSuffix: string(title[i:]),
+			})
+		}
+		author := []rune(book.Author)
+		for i := 0; i < len(author); i++ {
+			bookAuthorSuffixes = append(bookAuthorSuffixes, bookAuthorSuffix{
+				BookID:       book.ID,
+				AuthorSuffix: string(author[i:]),
+			})
+		}
+	}
+	tx, err := db.BeginTxx(c.Request().Context(), nil)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+	// bulk insert
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (:id , :title , :author , :genre , :created_at)", books)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (:book_id , :title_suffix)", bookTitleSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (:book_id , :author_suffix)", bookAuthorSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
 	for _, req := range reqSlice {
 		bookByGenreCache[req.Genre].Add(1)
 	}
 
 	_ = tx.Commit()
 
-	return c.JSON(http.StatusCreated, res)
+	return c.JSON(http.StatusCreated, books)
 }
 
 const bookPageLimit = 50
