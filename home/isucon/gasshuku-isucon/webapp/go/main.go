@@ -340,15 +340,6 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
-	pageStr := c.QueryParam("page")
-	if pageStr == "" {
-		pageStr = "1"
-	}
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
 	// 前ページの最後の会員ID
 	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
 	lastMemberID := c.QueryParam("last_member_id")
@@ -360,7 +351,7 @@ func getMembersHandler(c echo.Context) error {
 
 	var lastMemberName string
 	if order == "name_asc" || order == "name_desc" {
-		err = db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		err := db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -382,7 +373,7 @@ func getMembersHandler(c echo.Context) error {
 	query += "LIMIT ?"
 
 	members := []Member{}
-	err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+	err := db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
