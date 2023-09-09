@@ -763,24 +763,17 @@ func getBooksHandler(c echo.Context) error {
 
 	query := "SELECT COUNT(*) FROM `book` "
 	var args []any
-	if title != "" {
-		query += "INNER JOIN `book_title_suffix` ON `book`.`id` = `book_title_suffix`.`book_id` "
-	}
-	if author != "" {
-		query += "INNER JOIN `book_author_suffix` ON `book`.`id` = `book_author_suffix`.`book_id` "
-	}
-
 	query += "WHERE "
 	if genre != "" {
 		query += "genre = ? AND "
 		args = append(args, genre)
 	}
 	if title != "" {
-		query += "`book_title_suffix`.`title_suffix` COLLATE utf8mb4_bin LIKE ? AND "
+		query += "id in (SELECT book_id from book_title_suffix WHERE `title_suffix` LIKE ?) AND "
 		args = append(args, title+"%")
 	}
 	if author != "" {
-		query += "`book_author_suffix`.`author_suffix` COLLATE utf8mb4_bin LIKE ? AND "
+		query += "`id in (SELECT book_id from book_author_suffix WHERE `author_suffix` LIKE ?) AND "
 		args = append(args, author+"%")
 	}
 	query = strings.TrimSuffix(query, "AND ")
