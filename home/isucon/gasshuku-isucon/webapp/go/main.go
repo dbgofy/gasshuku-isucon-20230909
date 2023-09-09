@@ -340,6 +340,8 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
+	var err error
+
 	// 前ページの最後の会員ID
 	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
 	lastMemberID := c.QueryParam("last_member_id")
@@ -350,8 +352,8 @@ func getMembersHandler(c echo.Context) error {
 	}
 
 	var lastMemberName string
-	if order == "name_asc" || order == "name_desc" {
-		err := db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+	if lastMemberID != "" && (order == "name_asc" || order == "name_desc") {
+		err = db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -361,19 +363,35 @@ func getMembersHandler(c echo.Context) error {
 	var filterString string
 	switch order {
 	case "name_asc":
-		query += "AND `name` > ? ORDER BY `name` ASC "
 		filterString = lastMemberName
+		if filterString == "" {
+			query += "ORDER BY `name` ASC "
+		} else {
+			query += "AND `name` > ? ORDER BY `name` ASC "
+		}
 	case "name_desc":
-		query += "AND `name` < ? ORDER BY `name` DESC "
 		filterString = lastMemberName
+		if filterString == "" {
+			query += "ORDER BY `name` DESC "
+		} else {
+			query += "AND `name` < ? ORDER BY `name` DESC "
+		}
 	default:
-		query += "AND `id` > ? ORDER BY `id` ASC "
 		filterString = lastMemberID
+		if filterString == "" {
+			query += "ORDER BY `id` ASC "
+		} else {
+			query += "AND `id` > ? ORDER BY `id` ASC "
+		}
 	}
 	query += "LIMIT ?"
 
 	members := []Member{}
-	err := db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+	if filterString == "" {
+		err = db.SelectContext(c.Request().Context(), &members, query, memberPageLimit)
+	} else {
+		err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
