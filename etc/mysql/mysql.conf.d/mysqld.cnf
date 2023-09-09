@@ -76,3 +76,20 @@ long_query_time = 0
 max_binlog_size   = 100M
 # binlog_do_db		= include_database_name
 # binlog_ignore_db	= include_database_name
+
+
+# https://gist.github.com/molotovbliss/27919f6af96a88c827f50d529f6de59c
+innodb_buffer_pool_size = 4G
+innodb_log_buffer_size = 256M
+innodb_log_file_size = 1G
+innodb_write_io_threads = 16
+innodb_flush_log_at_trx_commit = 0
+
+# https://zenn.dev/kangaechu/scraps/227e485951748c
+innodb_doublewrite = 0
+innodb_flush_method = O_DIRECT_NO_FSYNC
+
+# https://matsuu.hatenablog.com/entry/2021/09/20/204341
+innodb_flush_log_at_timeout = 3
+#innodb_log_group_home_dir = /dev/shm
+disable_log_bin
