@@ -288,8 +288,10 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "key must be 16 characters")
 	}
 
-	cmd := exec.Command("sh", "../sql/init_db.sh")
+	cmd := exec.CommandContext(c.Request().Context(), "bash", "../sql/init_db.sh")
 	cmd.Env = os.Environ()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
