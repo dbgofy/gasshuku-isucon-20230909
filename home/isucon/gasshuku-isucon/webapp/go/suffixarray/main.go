@@ -41,7 +41,7 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	size := 50000
+	size := 20000
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
 
@@ -91,7 +91,6 @@ func main() {
 }
 
 func insert(ctx context.Context, db *sqlx.DB, column string, values []suffix) error {
-	log.Printf("insert %d values into %s\n", len(values), column)
 	_, err := db.NamedExecContext(ctx, "INSERT INTO `book_"+column+"_suffix` (`book_id`, `"+column+"_suffix`) VALUES (:id , :value)", values)
 	if err != nil {
 		return fmt.Errorf("insert %s: %w", column, err)
