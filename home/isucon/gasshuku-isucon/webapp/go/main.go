@@ -772,7 +772,7 @@ func getBooksHandler(c echo.Context) error {
 		args = append(args, title+"%")
 	}
 	if author != "" {
-		query += "`id in (SELECT book_id from book_author_suffix WHERE author_suffix LIKE ? ) AND "
+		query += "id in (SELECT book_id from book_author_suffix WHERE author_suffix LIKE ? ) AND "
 		args = append(args, author+"%")
 	}
 	query = strings.TrimSuffix(query, "AND ")
