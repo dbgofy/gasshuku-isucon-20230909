@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -174,8 +175,9 @@ func getEnvOrDefault(key string, defaultValue string) string {
 }
 
 var (
-	block      cipher.Block
-	qrFileLock sync.Mutex
+	block              cipher.Block
+	qrFileLock         sync.Mutex
+	notBannedMemberNum atomic.Int32
 )
 
 // AES + CTRモード + base64エンコードでテキストを暗号化
@@ -284,6 +286,13 @@ func initializeHandler(c echo.Context) error {
 		log.Panic(err.Error())
 	}
 
+	var total int32
+	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	notBannedMemberNum.Store(total)
+
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
 		Language: "Go",
 	})
@@ -327,6 +336,7 @@ func postMemberHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	notBannedMemberNum.Add(1)
 
 	return c.JSON(http.StatusCreated, res)
 }
@@ -397,15 +407,9 @@ func getMembersHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "no members to show in this page")
 	}
 
-	var total int
-	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
 	return c.JSON(http.StatusOK, GetMembersResponse{
 		Members: members,
-		Total:   total,
+		Total:   int(notBannedMemberNum.Load()),
 	})
 }
 
@@ -542,6 +546,7 @@ func banMemberHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	notBannedMemberNum.Add(-1)
 	_ = tx.Commit()
 
 	return c.NoContent(http.StatusNoContent)
