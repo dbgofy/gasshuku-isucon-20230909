@@ -967,12 +967,12 @@ func getLendingsHandler(c echo.Context) error {
 	}
 
 	query := "SELECT " +
-		"`lending`.`id` as `lending_id` " +
-		"`lending`.`member_id` as `member_id` " +
-		"`lending`.`book_id` as `book_id` " +
-		"`lending`.`due` as `due` " +
-		"`lending`.`created_at` as `created_at` " +
-		"`member`.`name` as `member_name` " +
+		"`lending`.`id` as `lending_id`, " +
+		"`lending`.`member_id` as `member_id`, " +
+		"`lending`.`book_id` as `book_id`, " +
+		"`lending`.`due` as `due`, " +
+		"`lending`.`created_at` as `created_at`, " +
+		"`member`.`name` as `member_name`, " +
 		"`book`.`title` as `book_title` " +
 		" FROM `lending` INNER JOIN `member` ON `lending`.`member_id` = `member`.`id` INNER JOIN `book` ON `lending`.`book_id` = `book`.`id` "
 	args := []any{}
