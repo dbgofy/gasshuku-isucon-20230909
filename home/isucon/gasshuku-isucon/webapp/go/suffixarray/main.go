@@ -39,24 +39,39 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	var titles, authors []suffix
+	size := 100
+	titles := make([]suffix, 0, size)
+	authors := make([]suffix, 0, size)
 	for _, book := range books {
 		title := []rune(book.Title)
 		for i := 0; i < len(title); i++ {
 			titles = append(titles, suffix{book.ID, string(title[i:])})
+		}
+		if len(titles)%size == 0 {
+			insert(ctx, db, "title", titles)
+			titles = make([]suffix, 0, size)
 		}
 
 		author := []rune(book.Author)
 		for i := 0; i < len(author); i++ {
 			authors = append(authors, suffix{book.ID, string(author[i:])})
 		}
+		if len(authors)%size == 0 {
+			insert(ctx, db, "author", authors)
+			authors = make([]suffix, 0, size)
+		}
 	}
-	if _, err := db.NamedExecContext(ctx, "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (:id , :value)", titles); err != nil {
-		log.Fatalln("insert titles", err)
+	insert(ctx, db, "title", titles)
+	insert(ctx, db, "author", authors)
+}
+
+func insert(ctx context.Context, db *sqlx.DB, column string, values []suffix) error {
+	log.Printf("insert %d values into %s\n", len(values), column)
+	_, err := db.NamedExecContext(ctx, "INSERT INTO `book_"+column+"_suffix` (`book_id`, `"+column+"_suffix`) VALUES (:id , :value)", values)
+	if err != nil {
+		return fmt.Errorf("insert %s: %w", column, err)
 	}
-	if _, err := db.NamedExecContext(ctx, "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (:id , :value)", authors); err != nil {
-		log.Fatalln("insert titles", err)
-	}
+	return nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {
