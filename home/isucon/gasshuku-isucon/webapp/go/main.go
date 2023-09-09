@@ -729,8 +729,14 @@ func getBooksHandler(c echo.Context) error {
 	for _, book := range books {
 		bookIDs = append(bookIDs, book.ID)
 	}
+	query, args, err = sqlx.In("SELECT book_id FROM `book` WHERE `book_id` IN (?)", bookIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	query = db.Rebind(query)
+
 	var lendingBookIDs []string
-	err = tx.SelectContext(c.Request().Context(), &lendingBookIDs, "SELECT book_id FROM `book` WHERE `book_id` IN (?)", bookIDs)
+	err = tx.SelectContext(c.Request().Context(), &lendingBookIDs, query, args...)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
