@@ -202,8 +202,6 @@ func decrypt(cipherText string) (string, error) {
 	return string(decryptedText), nil
 }
 
-const qrCodeFileName = "../images/qr.png"
-
 // QRコードを生成
 func generateQRCode(id string) ([]byte, error) {
 	encryptedID, err := encrypt(id)
@@ -211,6 +209,16 @@ func generateQRCode(id string) ([]byte, error) {
 		return nil, err
 	}
 
+	qrCodeFileName := fmt.Sprintf("../images/%s.png", id)
+	file, err := os.Open(qrCodeFileName)
+	if err == nil {
+		defer file.Close()
+		return io.ReadAll(file)
+	}
+
+	qrFileLock.Lock()
+	defer qrFileLock.Unlock()
+	//TODO: 一旦直前でlockするようにする
 	/*
 		生成するQRコードの仕様
 		 - PNGフォーマット
@@ -225,7 +233,7 @@ func generateQRCode(id string) ([]byte, error) {
 		return nil, err
 	}
 
-	file, err := os.Open(qrCodeFileName)
+	file, err = os.Open(qrCodeFileName)
 	if err != nil {
 		return nil, err
 	}
@@ -555,11 +563,6 @@ func getMemberQRCodeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	qrFileLock.Lock()
-	defer qrFileLock.Unlock()
-	//TODO: ロックフリーにしたいね
-	//TODO: 一度生成すれば使いまわせる？
-
 	qrCode, err := generateQRCode(id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -811,9 +814,6 @@ func getBookQRCodeHandler(c echo.Context) error {
 
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	qrFileLock.Lock()
-	defer qrFileLock.Unlock()
 
 	qrCode, err := generateQRCode(id)
 	if err != nil {
