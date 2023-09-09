@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"io"
 	"log"
 	"net/http"
@@ -23,9 +25,15 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
+	"github.com/uptrace/opentelemetry-go-extra/otelplay"
 )
 
 func main() {
+	ctx := context.Background()
+
+	shutdown := otelplay.ConfigureOpentelemetry(ctx)
+	defer shutdown()
+
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
 	user := getEnvOrDefault("DB_USER", "isucon")
@@ -54,6 +62,7 @@ func main() {
 	e := echo.New()
 	e.Debug = true
 	e.Use(middleware.Logger())
+	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
