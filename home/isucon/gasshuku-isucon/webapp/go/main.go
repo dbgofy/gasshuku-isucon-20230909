@@ -351,34 +351,38 @@ func getMembersHandler(c echo.Context) error {
 
 	// 前ページの最後の会員ID
 	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
-	_ = c.QueryParam("last_member_id")
+	lastMemberID := c.QueryParam("last_member_id")
 
 	order := c.QueryParam("order")
 	if order != "" && order != "name_asc" && order != "name_desc" {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid order")
 	}
 
-	tx, err := db.BeginTxx(c.Request().Context(), &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	var lastMemberName string
+	if order == "name_asc" || order == "name_desc" {
+		err = db.SelectContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
 
 	query := "SELECT * FROM `member` WHERE `banned` = false "
+	var filterString string
 	switch order {
 	case "name_asc":
-		query += "ORDER BY `name` ASC "
+		query += "AND `name` > ? ORDER BY `name` ASC "
+		filterString = lastMemberName
 	case "name_desc":
-		query += "ORDER BY `name` DESC "
+		query += "AND `name` < ? ORDER BY `name` DESC "
+		filterString = lastMemberName
 	default:
-		query += "ORDER BY `id` ASC "
+		query += "AND `id` > ? ORDER BY `id` ASC "
+		filterString = lastMemberID
 	}
-	query += "LIMIT ? OFFSET ?" //TODO: あー遅そう
+	query += "LIMIT ?"
 
 	members := []Member{}
-	err = tx.SelectContext(c.Request().Context(), &members, query, memberPageLimit, (page-1)*memberPageLimit)
+	err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -387,12 +391,10 @@ func getMembersHandler(c echo.Context) error {
 	}
 
 	var total int
-	err = tx.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-
-	_ = tx.Commit()
 
 	return c.JSON(http.StatusOK, GetMembersResponse{
 		Members: members,
