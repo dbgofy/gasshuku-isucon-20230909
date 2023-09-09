@@ -16,7 +16,7 @@ go-gen:
 
 .PHONY: run-go
 run-go:
-	cd webapp/go && go run -buildvcs .
+	cd webapp/go && go build -o app *.go && ./app
 
 .PHONY: logrotate
 logrotate:

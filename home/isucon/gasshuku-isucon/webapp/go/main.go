@@ -9,10 +9,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/uptrace/opentelemetry-go-extra/otelsql"
-	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"log"
 	"net/http"
@@ -28,7 +24,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/uptrace-go/uptrace"
 	"golang.org/x/sync/errgroup"
@@ -59,7 +54,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemKey.String("mysql:"+revision)))
+	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -77,9 +72,6 @@ func main() {
 	}
 
 	e := echo.New()
-	e.Debug = true
-	e.Use(middleware.Logger())
-	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
