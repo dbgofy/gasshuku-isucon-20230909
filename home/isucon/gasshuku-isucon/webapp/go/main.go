@@ -346,11 +346,11 @@ func initializeHandler(c echo.Context) error {
 		}
 	}
 	// bulk insert
-	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (?, ?)", bookTitleSuffixes)
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (:id , :suffix_title)", bookTitleSuffixes)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (?, ?)", bookAuthorSuffixes)
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (:id , :suffix_author)", bookAuthorSuffixes)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
