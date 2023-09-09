@@ -37,3 +37,13 @@
 /etc/mysql/mysql.conf.d/*
 !/etc/mysql/mysql.conf.d/mysqld.cnf
 
+# /home/isucon/gasshuku-isucon/mysqldumpslow.log
+/*
+!/home
+/home/*
+!/home/isucon
+/home/isucon/*
+!/home/isucon/gasshuku-isucon
+/home/isucon/gasshuku-isucon/*
+!/home/isucon/gasshuku-isucon/mysqldumpslow.log
+

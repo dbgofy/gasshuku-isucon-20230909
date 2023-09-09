@@ -99,6 +99,7 @@
 0664:1000:1000:home/isucon/gasshuku-isucon/bench/validator/meta.go
 0664:1000:1000:home/isucon/gasshuku-isucon/bench/validator/qrcode.go
 0664:1000:1000:home/isucon/gasshuku-isucon/bench/validator/validator.go
+0644:0:0:home/isucon/gasshuku-isucon/mysqldumpslow.log
 0775:1000:1000:home/isucon/gasshuku-isucon/webapp/go
 0775:1000:1000:home/isucon/gasshuku-isucon/webapp
 0644:1000:1000:home/isucon/gasshuku-isucon/webapp/go/go.mod
