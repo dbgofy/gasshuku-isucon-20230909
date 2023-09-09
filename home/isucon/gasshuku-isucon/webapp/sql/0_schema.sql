@@ -48,11 +48,11 @@ DROP TABLE IF EXISTS `book_title_suffix`;
 CREATE TABLE `book_title_suffix` (
   `book_id` varchar(26) NOT NULL,
   `title_suffix` varchar(255) NOT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `book_author_suffix`;
 
 CREATE TABLE `book_author_suffix` (
    `book_id` varchar(26) NOT NULL,
    `author_suffix` varchar(255) NOT NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
