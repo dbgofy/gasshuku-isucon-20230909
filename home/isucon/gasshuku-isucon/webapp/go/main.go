@@ -377,7 +377,7 @@ func postMemberHandler(c echo.Context) error {
 		Address:     req.Address,
 		PhoneNumber: req.PhoneNumber,
 		Banned:      false,
-		CreatedAt:   time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)),
+		CreatedAt:   time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond),
 	}
 	_, err := db.ExecContext(c.Request().Context(),
 		"INSERT INTO `member` (`id`, `name`, `address`, `phone_number`, `banned`, `created_at`) VALUES (?, ?, ?, ?, false, ?)",
@@ -655,7 +655,7 @@ func postBooksHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	createdAt := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60))
+	createdAt := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond)
 
 	books := make([]Book, 0, len(reqSlice))
 	for _, req := range reqSlice {
@@ -987,7 +987,7 @@ func postLendingsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	lendingTime := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60))
+	lendingTime := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond)
 	due := lendingTime.Add(LendingPeriod * time.Millisecond) //MEMO: created_atから算出できるので持つ必要なさそう？
 	res := make([]PostLendingsResponse, len(req.BookIDs))
 
@@ -1070,7 +1070,7 @@ func getLendingsHandler(c echo.Context) error {
 	args := []any{}
 	if overDue == "true" {
 		query += " WHERE `due` > ?"
-		args = append(args, time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)))
+		args = append(args, time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond))
 	}
 	query += " ORDER BY `lending`.`id` ASC"
 
