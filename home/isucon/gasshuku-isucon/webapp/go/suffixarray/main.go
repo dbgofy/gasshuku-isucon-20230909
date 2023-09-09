@@ -10,11 +10,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type suffix struct {
-	ID    string `db:"id"`
-	Value string `db:"value"`
-}
-
 func main() {
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
@@ -41,34 +36,41 @@ func main() {
 	}
 
 	size := 100
-	titles := make([]suffix, 0, size)
-	authors := make([]suffix, 0, size)
+	titles := make([]map[string]interface{}, 0, size)
+	authors := make([]map[string]interface{}, 0, size)
 	for _, book := range books {
 		title := []rune(book.Title)
 		for i := 0; i < len(title); i++ {
-			titles = append(titles, suffix{book.ID, string(title[i:])})
+			titles = append(titles, map[string]interface{}{
+				"book_id":      book.ID,
+				"title_suffix": string(title[i:]),
+			})
 		}
 		if len(titles)%size == 0 {
 			insert(ctx, db, "title", titles)
-			titles = make([]suffix, 0, size)
+			titles = make([]map[string]interface{}, 0, size)
 		}
 
 		author := []rune(book.Author)
 		for i := 0; i < len(author); i++ {
-			authors = append(authors, suffix{book.ID, string(author[i:])})
+			authors = append(authors, map[string]interface{}{
+				"book_id":       book.ID,
+				"author_suffix": string(author[i:]),
+			})
 		}
 		if len(authors)%size == 0 {
 			insert(ctx, db, "author", authors)
-			authors = make([]suffix, 0, size)
+			authors = make([]map[string]interface{}, 0, size)
 		}
 	}
 	insert(ctx, db, "title", titles)
 	insert(ctx, db, "author", authors)
 }
 
-func insert(ctx context.Context, db *sqlx.DB, column string, values []suffix) error {
-	log.Printf("insert %d values into %s\n", len(values), column)
-	_, err := db.NamedExecContext(ctx, "INSERT INTO `book_"+column+"_suffix` (`book_id`, `"+column+"_suffix`) VALUES (:id , :value)", values)
+func insert(ctx context.Context, db *sqlx.DB, column string, values []map[string]interface{}) error {
+	query := "INSERT INTO `book_" + column + "_suffix` (`book_id`, `" + column + "_suffix`) VALUES (:book_id , :" + column + "_suffix)"
+	log.Println(query)
+	_, err := db.NamedExecContext(ctx, query, values)
 	if err != nil {
 		return fmt.Errorf("insert %s: %w", column, err)
 	}
