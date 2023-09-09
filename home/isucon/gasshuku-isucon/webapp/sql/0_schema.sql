@@ -10,7 +10,7 @@ CREATE TABLE `book` (
   INDEX `IX_genre_id` (`genre`, `id`),
   FULLTEXT (title) WITH PARSER ngram,
   FULLTEXT (author) WITH PARSER ngram
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `key`;
 
