@@ -16,7 +16,7 @@ go-gen:
 
 .PHONY: run-go
 run-go:
-	cd webapp/go && go build -o app *.go && ./app
+	cd webapp/go && go run *.go
 
 .PHONY: run-bench
 run-bench:
