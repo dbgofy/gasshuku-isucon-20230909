@@ -8,7 +8,7 @@ CREATE TABLE `book` (
   `created_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
   INDEX `IX_genre_id` (`genre`, `id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `key`;
 
@@ -16,7 +16,7 @@ CREATE TABLE `key` (
   `id` int NOT NULL AUTO_INCREMENT,
   `key` char(16) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `lending`;
 
@@ -27,7 +27,7 @@ CREATE TABLE `lending` (
   `due` datetime(6) NOT NULL,
   `created_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `member`;
 
@@ -41,4 +41,18 @@ CREATE TABLE `member` (
   PRIMARY KEY (`id`),
   INDEX `IX_banned_id` (`banned`, `id`),
   INDEX `IX_banned_name` (`banned`, `name`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
+
+DROP TABLE IF EXISTS `book_title_suffix`;
+
+CREATE TABLE `book_title_suffix` (
+  `book_id` varchar(26) NOT NULL,
+  `title_suffix` varchar(255) NOT NULL
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;
+
+DROP TABLE IF EXISTS `book_author_suffix`;
+
+CREATE TABLE `book_author_suffix` (
+   `book_id` varchar(26) NOT NULL,
+   `author_suffix` varchar(255) NOT NULL
+) ENGINE = InnoDB COLLATE = utf8mb4_bin DEFAULT CHARSET = utf8mb4;

@@ -16,7 +16,13 @@ go-gen:
 
 .PHONY: run-go
 run-go:
-	cd webapp/go && go build -o app *.go && ./app
+	cd webapp/go && go run -buildvcs .
+
+.PHONY: logrotate
+logrotate:
+	mysqldumpslow -s t - < /var/log/mysql/mysql-slow.log > mysqldumpslow.log
+	cp /var/log/mysql/mysql-slow.log /var/log/mysql/mysql-slow.log.bak
+	> /var/log/mysql/mysql-slow.log
 
 .PHONY: run-bench
 run-bench:

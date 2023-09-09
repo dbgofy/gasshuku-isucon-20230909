@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -8,11 +9,16 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/uptrace/opentelemetry-go-extra/otelsql"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,10 +28,29 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
+	"github.com/uptrace/uptrace-go/uptrace"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
+	ctx := context.Background()
+
+	var revision string
+	{
+		info, _ := debug.ReadBuildInfo()
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				revision = s.Value
+			}
+		}
+		uptrace.ConfigureOpentelemetry(
+			uptrace.WithServiceName("webapp:" + revision),
+		)
+		defer uptrace.Shutdown(ctx)
+	}
+
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
 	user := getEnvOrDefault("DB_USER", "isucon")
@@ -34,7 +59,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = sqlx.Open("mysql", dsn)
+	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemKey.String("mysql:"+revision)))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -52,6 +77,9 @@ func main() {
 	}
 
 	e := echo.New()
+	e.Debug = true
+	e.Use(middleware.Logger())
+	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
@@ -261,39 +289,57 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "key must be 16 characters")
 	}
 
-	cmd := exec.Command("sh", "../sql/init_db.sh")
-	cmd.Env = os.Environ()
-	err := cmd.Run()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
+	g, ctx := errgroup.WithContext(c.Request().Context())
 
-	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
+	g.Go(func() error {
+		cmd := exec.CommandContext(ctx, "bash", "../sql/init_db.sh")
+		cmd.Env = os.Environ()
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
+		return err
+	})
 
-	block, err = aes.NewCipher([]byte(req.Key))
-	if err != nil {
-		log.Panic(err.Error())
-	}
+	g.Go(func() error {
+		_, err := db.ExecContext(c.Request().Context(), "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
+		return err
+	})
 
-	var total int32
-	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	notBannedMemberNum.Store(total)
+	g.Go(func() error {
+		var err error
+		block, err = aes.NewCipher([]byte(req.Key))
+		if err != nil {
+			log.Panic(err.Error())
+		}
+		return nil
+	})
 
-	var genreCounts []genreCount
-	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
-	if err != nil {
+	g.Go(func() error {
+		var total int32
+		err := db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+		if err != nil {
+			return err
+		}
+		notBannedMemberNum.Store(total)
+		return nil
+	})
+
+	g.Go(func() error {
+		var genreCounts []genreCount
+		err := db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+		if err != nil {
+			return err
+		}
+		bookByGenreCache = make([]*atomic.Int64, 10)
+		for _, genreCount := range genreCounts {
+			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	bookByGenreCache = make([]*atomic.Int64, 10)
-	for _, genreCount := range genreCounts {
-		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
-		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
 	}
 
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
@@ -331,7 +377,7 @@ func postMemberHandler(c echo.Context) error {
 		Address:     req.Address,
 		PhoneNumber: req.PhoneNumber,
 		Banned:      false,
-		CreatedAt:   time.Now(),
+		CreatedAt:   time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond),
 	}
 	_, err := db.ExecContext(c.Request().Context(),
 		"INSERT INTO `member` (`id`, `name`, `address`, `phone_number`, `banned`, `created_at`) VALUES (?, ?, ?, ?, false, ?)",
@@ -592,6 +638,16 @@ type PostBooksRequest struct {
 	Genre  Genre  `json:"genre"`
 }
 
+type bookTitleSuffix struct {
+	BookID      string `db:"book_id"`
+	TitleSuffix string `db:"title_suffix"`
+}
+
+type bookAuthorSuffix struct {
+	BookID       string `db:"book_id"`
+	AuthorSuffix string `db:"author_suffix"`
+}
+
 // 蔵書を登録 (複数札を一気に登録)
 func postBooksHandler(c echo.Context) error {
 	var reqSlice []PostBooksRequest
@@ -599,17 +655,9 @@ func postBooksHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	res := []Book{}
-	createdAt := time.Now()
+	createdAt := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond)
 
-	tx, err := db.BeginTxx(c.Request().Context(), nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
+	books := make([]Book, 0, len(reqSlice))
 	for _, req := range reqSlice {
 		if req.Title == "" || req.Author == "" {
 			return echo.NewHTTPError(http.StatusBadRequest, "title, author is required")
@@ -617,31 +665,61 @@ func postBooksHandler(c echo.Context) error {
 		if req.Genre < 0 || req.Genre > 9 {
 			return echo.NewHTTPError(http.StatusBadRequest, "genre is invalid")
 		}
-
-		id := generateID()
-
-		_, err := tx.ExecContext(c.Request().Context(),
-			"INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (?, ?, ?, ?, ?)", //TODO: bulkInsert
-			id, req.Title, req.Author, req.Genre, createdAt)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-
-		var record Book
-		err = tx.GetContext(c.Request().Context(), &record, "SELECT * FROM `book` WHERE `id` = ?", id) //TODO: だからなんで取り出してるの・・・？そのまま返せばいいじゃん・・・
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-		}
-
-		res = append(res, record)
+		books = append(books, Book{
+			ID:        generateID(),
+			Title:     req.Title,
+			Author:    req.Author,
+			Genre:     req.Genre,
+			CreatedAt: createdAt,
+		})
 	}
+
+	bookTitleSuffixes := make([]bookTitleSuffix, 0, len(books))
+	bookAuthorSuffixes := make([]bookAuthorSuffix, 0, len(books))
+	for _, book := range books {
+		title := []rune(book.Title)
+		for i := 0; i < len(title); i++ {
+			bookTitleSuffixes = append(bookTitleSuffixes, bookTitleSuffix{
+				BookID:      book.ID,
+				TitleSuffix: string(title[i:]),
+			})
+		}
+		author := []rune(book.Author)
+		for i := 0; i < len(author); i++ {
+			bookAuthorSuffixes = append(bookAuthorSuffixes, bookAuthorSuffix{
+				BookID:       book.ID,
+				AuthorSuffix: string(author[i:]),
+			})
+		}
+	}
+	tx, err := db.BeginTxx(c.Request().Context(), nil)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+	// bulk insert
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book` (`id`, `title`, `author`, `genre`, `created_at`) VALUES (:id , :title , :author , :genre , :created_at)", books)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (:book_id , :title_suffix)", bookTitleSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	_, err = db.NamedExecContext(c.Request().Context(), "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (:book_id , :author_suffix)", bookAuthorSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
 	for _, req := range reqSlice {
 		bookByGenreCache[req.Genre].Add(1)
 	}
 
 	_ = tx.Commit()
 
-	return c.JSON(http.StatusCreated, res)
+	return c.JSON(http.StatusCreated, books)
 }
 
 const bookPageLimit = 50
@@ -690,12 +768,12 @@ func getBooksHandler(c echo.Context) error {
 		args = append(args, genre)
 	}
 	if title != "" {
-		query += "title COLLATE utf8mb4_bin LIKE ? AND "
-		args = append(args, "%"+title+"%") //TODO: おーやりがいありそう。suffix arrayとか使ってみたい
+		query += "id in (SELECT book_id from book_title_suffix WHERE title_suffix LIKE ? ) AND "
+		args = append(args, title+"%")
 	}
 	if author != "" {
-		query += "author COLLATE utf8mb4_bin LIKE ? AND "
-		args = append(args, "%"+author+"%")
+		query += "id in (SELECT book_id from book_author_suffix WHERE author_suffix LIKE ? ) AND "
+		args = append(args, author+"%")
 	}
 	query = strings.TrimSuffix(query, "AND ")
 
@@ -909,7 +987,7 @@ func postLendingsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	lendingTime := time.Now()
+	lendingTime := time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond)
 	due := lendingTime.Add(LendingPeriod * time.Millisecond) //MEMO: created_atから算出できるので持つ必要なさそう？
 	res := make([]PostLendingsResponse, len(req.BookIDs))
 
@@ -992,7 +1070,7 @@ func getLendingsHandler(c echo.Context) error {
 	args := []any{}
 	if overDue == "true" {
 		query += " WHERE `due` > ?"
-		args = append(args, time.Now())
+		args = append(args, time.Now().In(time.FixedZone("Asia/Tokyo", 9*60*60)).Truncate(time.Microsecond))
 	}
 	query += " ORDER BY `lending`.`id` ASC"
 
