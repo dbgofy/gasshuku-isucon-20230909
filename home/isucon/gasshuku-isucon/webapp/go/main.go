@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"io"
 	"log"
@@ -42,7 +43,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = sqlx.Open("mysql", dsn)
+	db, err = otelsqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
 	}

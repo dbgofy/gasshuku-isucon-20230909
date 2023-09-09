@@ -53,6 +53,10 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/uptrace/opentelemetry-go-extra/otelplay v0.2.2 h1:eqJjqcRWSBhbBxyXMMQpCWQHa+PAkzinjQsQVOnP86U=
 github.com/uptrace/opentelemetry-go-extra/otelplay v0.2.2/go.mod h1:jWCuVhAbJWLcMuQIhCDs/+7dyPDCGC1w9Oqhy0DcJBk=
+github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.2 h1:USRngIQppxeyb39XzkVHXwQesKK0+JSwnHE/1c7fgic=
+github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.2/go.mod h1:1frv9RN1rlTq0jzCq+mVuEQisubZCQ4OU6S/8CaHzGY=
+github.com/uptrace/opentelemetry-go-extra/otelsqlx v0.2.2 h1:on1WgxU/BeTEECJ0YIf3mWP6QoOeTCc33ce7Yx275CQ=
+github.com/uptrace/opentelemetry-go-extra/otelsqlx v0.2.2/go.mod h1:0jd6Yb+UTnNMIkmR3np6MH5aA1rsiex7zrumHOaDkoE=
 github.com/uptrace/uptrace-go v1.16.0 h1:yB9vt1hBYYoXWExNx0okubLOjd339d7lH+/5o+Lp+MY=
 github.com/uptrace/uptrace-go v1.16.0/go.mod h1:Ssc5wLpoL+9V0qkT5FtrIiru9SY4xb7q1UVLjSpxpCg=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
