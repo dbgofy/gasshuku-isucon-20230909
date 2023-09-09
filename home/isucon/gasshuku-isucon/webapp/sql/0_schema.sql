@@ -46,15 +46,15 @@ CREATE TABLE `member` (
 DROP TABLE IF EXISTS `book_title_suffix`;
 
 CREATE TABLE `book_title_suffix` (
-  `id` varchar(26) NOT NULL,
+  `book_id` varchar(26) NOT NULL,
   `title_suffix` varchar(255) NOT NULL,
-  INDEX `IX_title_suffix_id` (`title_suffix`, `id`)
+  INDEX `IX_title_suffix_book_id` (`title_suffix`, `book_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `book_author_suffix`;
 
 CREATE TABLE `book_author_suffix` (
-   `id` varchar(26) NOT NULL,
+   `book_id` varchar(26) NOT NULL,
    `author_suffix` varchar(255) NOT NULL,
-   INDEX `IX_title_suffix_id` (`author_suffix`, `id`)
+   INDEX `IX_title_suffix_book_id` (`author_suffix`, `book_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
