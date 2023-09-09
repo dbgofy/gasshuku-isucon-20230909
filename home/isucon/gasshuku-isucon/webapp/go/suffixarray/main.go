@@ -43,7 +43,7 @@ func main() {
 	size := 100
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
-	for _, book := range books {
+	for j, book := range books {
 		title := []rune(book.Title)
 		for i := 0; i < len(title); i++ {
 			titles = append(titles, suffix{book.ID, string(title[i:])})
@@ -60,6 +60,10 @@ func main() {
 		if len(authors)%size == 0 {
 			insert(ctx, db, "author", authors)
 			authors = make([]suffix, 0, size)
+		}
+
+		if j%(len(books)/100) == 0 {
+			log.Printf("books %d%% (%d/%d)\n", len(books)%(len(books)/100), j, len(books))
 		}
 	}
 	insert(ctx, db, "title", titles)
