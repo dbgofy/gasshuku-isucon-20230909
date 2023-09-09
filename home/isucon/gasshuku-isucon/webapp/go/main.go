@@ -342,8 +342,6 @@ type GetMembersResponse struct {
 func getMembersHandler(c echo.Context) error {
 	var err error
 
-	// 前ページの最後の会員ID
-	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
 	lastMemberID := c.QueryParam("last_member_id")
 
 	order := c.QueryParam("order")
@@ -665,14 +663,6 @@ func getBooksHandler(c echo.Context) error {
 	if pageStr == "" {
 		pageStr = "1"
 	}
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	}
-
-	// 前ページの最後の蔵書ID
-	// シーク法をフロントエンドでは実装したが、バックエンドは力尽きた
-	_ = c.QueryParam("last_book_id")
 
 	tx, err := db.BeginTxx(c.Request().Context(), nil)
 	if err != nil {
@@ -709,8 +699,13 @@ func getBooksHandler(c echo.Context) error {
 	}
 
 	query = strings.ReplaceAll(query, "COUNT(*)", "*")
-	query += "ORDER BY `id` ASC LIMIT ? OFFSET ?"
-	args = append(args, bookPageLimit, (page-1)*bookPageLimit)
+	lastBookID := c.QueryParam("last_book_id")
+	if lastBookID != "" {
+		query += "AND `id` > ? "
+		args = append(args, lastBookID)
+	}
+	query += "ORDER BY `id` ASC LIMIT ? "
+	args = append(args, bookPageLimit)
 
 	var books []Book
 	err = tx.SelectContext(c.Request().Context(), &books, query, args...)
