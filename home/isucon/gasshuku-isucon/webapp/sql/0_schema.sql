@@ -7,7 +7,9 @@ CREATE TABLE `book` (
   `genre` int NOT NULL,
   `created_at` datetime(6) NOT NULL,
   PRIMARY KEY (`id`),
-  INDEX `IX_genre_id` (`genre`, `id`)
+  INDEX `IX_genre_id` (`genre`, `id`),
+  FULLTEXT (title) WITH PARSER ngram,
+  FULLTEXT (author) WITH PARSER ngram
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 DROP TABLE IF EXISTS `key`;
