@@ -40,7 +40,7 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	size := 100
+	size := 1000
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
 	for j, book := range books {
