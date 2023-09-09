@@ -265,6 +265,16 @@ type genreCount struct {
 	Count int64 `db:"c"`
 }
 
+type bookTitleSuffix struct {
+	BookID      string `db:"book_id"`
+	TitleSuffix string `db:"title_suffix"`
+}
+
+type bookAuthorSuffix struct {
+	BookID       string `db:"book_id"`
+	AuthorSuffix string `db:"author_suffix"`
+}
+
 // 初期化用ハンドラ
 func initializeHandler(c echo.Context) error {
 	var req InitializeHandlerRequest
@@ -309,6 +319,40 @@ func initializeHandler(c echo.Context) error {
 	for _, genreCount := range genreCounts {
 		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
 		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+	}
+
+	// suffix arrayの作成
+	var books []Book
+	err = db.SelectContext(c.Request().Context(), &books, "SELECT * FROM `book`")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	bookTitleSuffixes := make([]bookTitleSuffix, 0, len(books))
+	bookAuthorSuffixes := make([]bookAuthorSuffix, 0, len(books))
+	for _, book := range books {
+		title := book.Title
+		for i := 0; i < len(title); i++ {
+			bookTitleSuffixes = append(bookTitleSuffixes, bookTitleSuffix{
+				BookID:      book.ID,
+				TitleSuffix: title[i:],
+			})
+		}
+		author := book.Author
+		for i := 0; i < len(author); i++ {
+			bookAuthorSuffixes = append(bookAuthorSuffixes, bookAuthorSuffix{
+				BookID:       book.ID,
+				AuthorSuffix: author[i:],
+			})
+		}
+	}
+	// bulk insert
+	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `book_title_suffix` (`book_id`, `title_suffix`) VALUES (?, ?)", bookTitleSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `book_author_suffix` (`book_id`, `author_suffix`) VALUES (?, ?)", bookAuthorSuffixes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
@@ -720,7 +764,7 @@ func getBooksHandler(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
-		total = int(bookByGenreCache[Genre(genreInt)].Load())
+		total = int(bookByGenreCache[genreInt].Load())
 	} else {
 		err = tx.GetContext(c.Request().Context(), &total, query, args...)
 		if err != nil {
