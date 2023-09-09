@@ -729,7 +729,7 @@ func getBooksHandler(c echo.Context) error {
 	for _, book := range books {
 		bookIDs = append(bookIDs, book.ID)
 	}
-	query, args, err = sqlx.In("SELECT book_id FROM `book` WHERE `book_id` IN (?)", bookIDs)
+	query, args, err = sqlx.In("SELECT book_id FROM `lending` WHERE `book_id` IN (?)", bookIDs)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
