@@ -36,9 +36,9 @@ import (
 func main() {
 	ctx := context.Background()
 
+	var revision string
 	{
 		info, _ := debug.ReadBuildInfo()
-		var revision string
 		for _, s := range info.Settings {
 			if s.Key == "vcs.revision" {
 				revision = s.Value
@@ -58,7 +58,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
+	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemKey.String("mysql:"+revision)))
 	if err != nil {
 		log.Panic(err)
 	}
