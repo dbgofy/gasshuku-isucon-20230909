@@ -705,11 +705,11 @@ func getBooksHandler(c echo.Context) error {
 		args = append(args, genre)
 	}
 	if title != "" {
-		query += "(title) AGAINST (? IN BOOLEAN MODE) AND "
+		query += "MATCH (title) AGAINST (? IN BOOLEAN MODE) AND "
 		args = append(args, "*"+title+"*")
 	}
 	if author != "" {
-		query += "(author) AGAINST (? IN BOOLEAN MODE) AND "
+		query += "MATCH (author) AGAINST (? IN BOOLEAN MODE) AND "
 		args = append(args, "*"+author+"*")
 	}
 	query = strings.TrimSuffix(query, "AND ")
