@@ -761,19 +761,18 @@ func getBooksHandler(c echo.Context) error {
 		_ = tx.Rollback()
 	}()
 
-	query := "SELECT COUNT(*) FROM `book` "
+	query := "SELECT COUNT(*) FROM `book` WHERE "
 	var args []any
-	query += "WHERE "
 	if genre != "" {
 		query += "genre = ? AND "
 		args = append(args, genre)
 	}
 	if title != "" {
-		query += "id in (SELECT book_id from book_title_suffix WHERE title_suffix LIKE ?) AND "
+		query += "id in (SELECT book_id from book_title_suffix WHERE title_suffix LIKE ? ) AND "
 		args = append(args, title+"%")
 	}
 	if author != "" {
-		query += "`id in (SELECT book_id from book_author_suffix WHERE author_suffix LIKE ?) AND "
+		query += "`id in (SELECT book_id from book_author_suffix WHERE author_suffix LIKE ? ) AND "
 		args = append(args, author+"%")
 	}
 	query = strings.TrimSuffix(query, "AND ")
