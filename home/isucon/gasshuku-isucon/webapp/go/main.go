@@ -179,7 +179,7 @@ var (
 	qrFileLock         sync.Mutex
 	notBannedMemberNum atomic.Int32
 
-	bookByGenreCache map[Genre]*atomic.Int64
+	bookByGenreCache []*atomic.Int64
 )
 
 // AES + CTRモード + base64エンコードでテキストを暗号化
@@ -301,11 +301,11 @@ func initializeHandler(c echo.Context) error {
 	notBannedMemberNum.Store(total)
 
 	var genreCounts []genreCount
-	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre")
+	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	bookByGenreCache = make(map[Genre]*atomic.Int64)
+	bookByGenreCache = make([]*atomic.Int64, 10)
 	for _, genreCount := range genreCounts {
 		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
 		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
