@@ -307,6 +307,7 @@ func initializeHandler(c echo.Context) error {
 	}
 	bookByGenreCache = make(map[Genre]*atomic.Int64)
 	for _, genreCount := range genreCounts {
+		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
 		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
 	}
 
