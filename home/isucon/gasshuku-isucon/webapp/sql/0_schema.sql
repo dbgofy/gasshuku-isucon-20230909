@@ -42,3 +42,19 @@ CREATE TABLE `member` (
   INDEX `IX_banned_id` (`banned`, `id`),
   INDEX `IX_banned_name` (`banned`, `name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+DROP TABLE IF EXISTS `book_title_suffix`;
+
+CREATE TABLE `book_title_suffix` (
+  `id` varchar(26) NOT NULL,
+  `title_suffix` varchar(255) NOT NULL,
+  INDEX `IX_title_suffix_id` (`title_suffix`, `id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+DROP TABLE IF EXISTS `book_author_suffix`;
+
+CREATE TABLE `book_author_suffix` (
+   `id` varchar(26) NOT NULL,
+   `author_suffix` varchar(255) NOT NULL,
+   INDEX `IX_title_suffix_id` (`author_suffix`, `id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
