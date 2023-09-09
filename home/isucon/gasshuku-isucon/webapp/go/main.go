@@ -204,16 +204,16 @@ func decrypt(cipherText string) (string, error) {
 
 // QRコードを生成
 func generateQRCode(id string) ([]byte, error) {
-	encryptedID, err := encrypt(id)
-	if err != nil {
-		return nil, err
-	}
-
 	qrCodeFileName := fmt.Sprintf("../images/%s.png", id)
 	file, err := os.Open(qrCodeFileName)
 	if err == nil {
 		defer file.Close()
 		return io.ReadAll(file)
+	}
+
+	encryptedID, err := encrypt(id)
+	if err != nil {
+		return nil, err
 	}
 
 	qrFileLock.Lock()
