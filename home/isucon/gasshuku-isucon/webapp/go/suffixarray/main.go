@@ -40,7 +40,7 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	size := 1000
+	size := 3000
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
 	for j, book := range books {
@@ -63,7 +63,7 @@ func main() {
 		}
 
 		if j%(len(books)/100) == 0 {
-			log.Printf("books %d%% (%d/%d)\n", len(books)%(len(books)/100), j, len(books))
+			log.Printf("books %d%% (%d/%d)\n", j%(len(books)/100), j, len(books))
 		}
 	}
 	insert(ctx, db, "title", titles)
