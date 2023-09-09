@@ -105,11 +105,14 @@
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/go/go.mod
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/go/go.sum
 0644:0:0:home/isucon/gasshuku-isucon/webapp/go/main.go
+0755:0:0:home/isucon/gasshuku-isucon/webapp/go/suffixarray
+0644:0:0:home/isucon/gasshuku-isucon/webapp/go/suffixarray/main.go
 0755:1001:1000:home/isucon/gasshuku-isucon/webapp/sql
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/.gitignore
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/0_schema.sql
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/1_data.sql
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/init_db.sh
-0700:0:0:root/.ssh
 0700:0:0:root
+0644:0:0:root/.bashrc
+0700:0:0:root/.ssh
 0644:0:0:root/.ssh/authorized_keys
