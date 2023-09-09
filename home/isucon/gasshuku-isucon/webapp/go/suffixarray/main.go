@@ -40,7 +40,7 @@ func main() {
 		log.Fatalln("select books", err)
 	}
 
-	size := 10000
+	size := 3000
 	titles := make([]suffix, 0, size)
 	authors := make([]suffix, 0, size)
 	for j, book := range books {
@@ -49,9 +49,7 @@ func main() {
 			titles = append(titles, suffix{book.ID, string(title[i:])})
 		}
 		if len(titles)%size == 0 {
-			if err := insert(ctx, db, "title", titles); err != nil {
-				log.Fatalln(err)
-			}
+			insert(ctx, db, "title", titles)
 			titles = make([]suffix, 0, size)
 		}
 
@@ -60,9 +58,7 @@ func main() {
 			authors = append(authors, suffix{book.ID, string(author[i:])})
 		}
 		if len(authors)%size == 0 {
-			if err := insert(ctx, db, "author", authors); err != nil {
-				log.Fatalln(err)
-			}
+			insert(ctx, db, "author", authors)
 			authors = make([]suffix, 0, size)
 		}
 
@@ -70,15 +66,12 @@ func main() {
 			log.Printf("books %d%% (%d/%d)\n", j*100/len(books), j, len(books))
 		}
 	}
-	if err := insert(ctx, db, "title", titles); err != nil {
-		log.Fatalln(err)
-	}
-	if err := insert(ctx, db, "author", authors); err != nil {
-		log.Fatalln(err)
-	}
+	insert(ctx, db, "title", titles)
+	insert(ctx, db, "author", authors)
 }
 
 func insert(ctx context.Context, db *sqlx.DB, column string, values []suffix) error {
+	log.Printf("insert %d values into %s\n", len(values), column)
 	_, err := db.NamedExecContext(ctx, "INSERT INTO `book_"+column+"_suffix` (`book_id`, `"+column+"_suffix`) VALUES (:id , :value)", values)
 	if err != nil {
 		return fmt.Errorf("insert %s: %w", column, err)
