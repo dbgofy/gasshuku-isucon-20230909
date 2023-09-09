@@ -705,12 +705,12 @@ func getBooksHandler(c echo.Context) error {
 		args = append(args, genre)
 	}
 	if title != "" {
-		query += "title COLLATE utf8mb4_bin LIKE ? AND "
-		args = append(args, "%"+title+"%") //TODO: おーやりがいありそう。suffix arrayとか使ってみたい
+		query += "(title) AGAINST (? IN BOOLEAN MODE) AND "
+		args = append(args, "*"+title+"*")
 	}
 	if author != "" {
-		query += "author COLLATE utf8mb4_bin LIKE ? AND "
-		args = append(args, "%"+author+"%")
+		query += "(author) AGAINST (? IN BOOLEAN MODE) AND "
+		args = append(args, "*"+author+"*")
 	}
 	query = strings.TrimSuffix(query, "AND ")
 
