@@ -330,18 +330,18 @@ func initializeHandler(c echo.Context) error {
 	bookTitleSuffixes := make([]bookTitleSuffix, 0, len(books))
 	bookAuthorSuffixes := make([]bookAuthorSuffix, 0, len(books))
 	for _, book := range books {
-		title := book.Title
+		title := []rune(book.Title)
 		for i := 0; i < len(title); i++ {
 			bookTitleSuffixes = append(bookTitleSuffixes, bookTitleSuffix{
 				BookID:      book.ID,
-				TitleSuffix: title[i:],
+				TitleSuffix: string(title[i:]),
 			})
 		}
-		author := book.Author
+		author := []rune(book.Author)
 		for i := 0; i < len(author); i++ {
 			bookAuthorSuffixes = append(bookAuthorSuffixes, bookAuthorSuffix{
 				BookID:       book.ID,
-				AuthorSuffix: author[i:],
+				AuthorSuffix: string(author[i:]),
 			})
 		}
 	}
