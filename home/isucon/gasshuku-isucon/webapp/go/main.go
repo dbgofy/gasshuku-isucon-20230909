@@ -178,6 +178,8 @@ var (
 	block              cipher.Block
 	qrFileLock         sync.Mutex
 	notBannedMemberNum atomic.Int32
+
+	bookByGenreCache []*atomic.Int64
 )
 
 // AES + CTRモード + base64エンコードでテキストを暗号化
@@ -258,6 +260,11 @@ type InitializeHandlerResponse struct {
 	Language string `json:"language"`
 }
 
+type genreCount struct {
+	Genre Genre `db:"genre"`
+	Count int64 `db:"c"`
+}
+
 // 初期化用ハンドラ
 func initializeHandler(c echo.Context) error {
 	var req InitializeHandlerRequest
@@ -292,6 +299,17 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	notBannedMemberNum.Store(total)
+
+	var genreCounts []genreCount
+	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	bookByGenreCache = make([]*atomic.Int64, 10)
+	for _, genreCount := range genreCounts {
+		bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+		bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+	}
 
 	return c.JSON(http.StatusOK, InitializeHandlerResponse{
 		Language: "Go",
@@ -632,6 +650,9 @@ func postBooksHandler(c echo.Context) error {
 
 		res = append(res, record)
 	}
+	for _, req := range reqSlice {
+		bookByGenreCache[req.Genre].Add(1)
+	}
 
 	_ = tx.Commit()
 
@@ -694,10 +715,18 @@ func getBooksHandler(c echo.Context) error {
 	query = strings.TrimSuffix(query, "AND ")
 
 	var total int
-	err = tx.GetContext(c.Request().Context(), &total, query, args...)
-	if err != nil {
-		c.Logger().Error(err)
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	if genre != "" && title == "" && author == "" {
+		genreInt, err := strconv.Atoi(genre)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+		total = int(bookByGenreCache[Genre(genreInt)].Load())
+	} else {
+		err = tx.GetContext(c.Request().Context(), &total, query, args...)
+		if err != nil {
+			c.Logger().Error(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
 	}
 	if total == 0 {
 		return echo.NewHTTPError(http.StatusNotFound, "no books found")
