@@ -871,7 +871,10 @@ func getBooksHandler(c echo.Context) error {
 // 蔵書をタイトルで検索
 func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*GetBooksResponse, error) {
 	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE title_suffix LIKE ?"
-	booksQuery := "SELECT book.* FROM `book` " +
+	booksQuery := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"FROM `book` " +
 		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
 		"WHERE s.title_suffix LIKE ? AND `id` > ? " +
 		"ORDER BY `id` ASC LIMIT ?"
@@ -890,42 +893,14 @@ func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*Get
 		return nil, err
 	}
 	if resp.Total == 0 {
-		return nil, errors.New("no books found")
+		return &resp, nil
 	}
 
-	var books []Book
-	if err := tx.SelectContext(ctx, &books, booksQuery, title, lastID, limit); err != nil {
+	if err := tx.SelectContext(ctx, &resp.Books, booksQuery, title, lastID, limit); err != nil {
 		return nil, err
 	}
-	if len(books) == 0 {
-		return nil, errors.New("no books to show in this page")
-	}
-
-	bookIDs := make([]string, 0, len(books))
-	for _, book := range books {
-		bookIDs = append(bookIDs, book.ID)
-	}
-	var lendingBookIDs []string
-	lendingQuery, args, err := sqlx.In("SELECT book_id FROM `lending` WHERE `book_id` IN (?)", bookIDs)
-	if err != nil {
-		return nil, err
-	}
-	tx.Rebind(lendingQuery)
-	if err := tx.SelectContext(ctx, &lendingBookIDs, lendingQuery, args...); err != nil {
-		return nil, err
-	}
-	resBookIDsMap := make(map[string]struct{}, len(lendingBookIDs))
-	for _, resBookID := range lendingBookIDs {
-		resBookIDsMap[resBookID] = struct{}{}
-	}
-	for i, book := range books {
-		resp.Books[i].Book = book
-		_, ok := resBookIDsMap[book.ID]
-		if ok {
-			resp.Books[i].Lending = true
-		} else {
-			resp.Books[i].Lending = false
-		}
+	if len(resp.Books) == 0 {
+		return &resp, nil
 	}
 
 	if err := tx.Commit(); err != nil {
