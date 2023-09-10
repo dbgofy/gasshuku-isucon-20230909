@@ -70,6 +70,10 @@ func main() {
 		log.Panic(err)
 	}
 
+	if err := updateCache(ctx); err != nil {
+		log.Panic(err)
+	}
+
 	block, err = aes.NewCipher([]byte(key))
 	if err != nil {
 		log.Panic(err)
@@ -79,12 +83,22 @@ func main() {
 	e.Debug = true
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		e.DefaultHTTPErrorHandler(err, c)
-		go c.Logger().Errorj(log.JSON{
-			"error":  err.Error(),
-			"method": c.Request().Method,
-			"path":   c.Path(),
-			"params": c.QueryParams(),
-		})
+		go func() {
+			data := log.JSON{
+				"error":  err.Error(),
+				"method": c.Request().Method,
+				"path":   c.Path(),
+				"params": c.QueryParams(),
+			}
+			var httpErr *echo.HTTPError
+			if errors.As(err, &httpErr) {
+				if httpErr.Code < 500 {
+					c.Logger().Infoj(data)
+					return
+				}
+			}
+			c.Logger().Errorj(data)
+		}()
 	}
 	e.Use(otelecho.Middleware("dev-1"))
 
@@ -266,6 +280,37 @@ func generateQRCode(id string) ([]byte, error) {
 	return io.ReadAll(file)
 }
 
+func updateCache(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var total int32
+		err := db.GetContext(ctx, &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+		if err != nil {
+			return err
+		}
+		notBannedMemberNum.Store(total)
+		return nil
+	})
+
+	g.Go(func() error {
+		var genreCounts []genreCount
+		err := db.SelectContext(ctx, &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+		if err != nil {
+			return err
+		}
+		bookByGenreCache = make([]*atomic.Int64, 10)
+		for _, genreCount := range genreCounts {
+			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+		}
+		return nil
+	})
+
+	return g.Wait()
+
+}
+
 /*
 ---------------------------------------------------------------
 Initialization API
@@ -322,27 +367,7 @@ func initializeHandler(c echo.Context) error {
 	})
 
 	g.Go(func() error {
-		var total int32
-		err := db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-		if err != nil {
-			return err
-		}
-		notBannedMemberNum.Store(total)
-		return nil
-	})
-
-	g.Go(func() error {
-		var genreCounts []genreCount
-		err := db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
-		if err != nil {
-			return err
-		}
-		bookByGenreCache = make([]*atomic.Int64, 10)
-		for _, genreCount := range genreCounts {
-			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
-			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
-		}
-		return nil
+		return updateCache(c.Request().Context())
 	})
 
 	if err := g.Wait(); err != nil {
@@ -741,8 +766,13 @@ func getBooksHandler(c echo.Context) error {
 	title := c.QueryParam("title")
 	author := c.QueryParam("author")
 	genre := c.QueryParam("genre")
+	lastBookID := c.QueryParam("last_book_id")
+
+	var err error
+
+	var genreInt int
 	if genre != "" {
-		genreInt, err := strconv.Atoi(genre)
+		genreInt, err = strconv.Atoi(genre)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
@@ -758,6 +788,51 @@ func getBooksHandler(c echo.Context) error {
 	pageStr := c.QueryParam("page")
 	if pageStr == "" {
 		pageStr = "1"
+	}
+
+	// ジャンルのみ指定
+	if genre != "" && title == "" && author == "" {
+		resp, err := getBooksByGenre(c.Request().Context(), genreInt, lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
+	}
+
+	// タイトルのみ指定
+	if genre == "" && title != "" && author == "" {
+		resp, err := getBooksByTitle(c.Request().Context(), title+"%", lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
+	}
+
+	// ジャンルとタイトルを指定
+	if genre != "" && title != "" && author == "" {
+		resp, err := getBooksByGenreTitle(c.Request().Context(), genreInt, title+"%", lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
 	}
 
 	tx, err := db.BeginTxx(c.Request().Context(), nil)
@@ -786,10 +861,6 @@ func getBooksHandler(c echo.Context) error {
 
 	var total int
 	if genre != "" && title == "" && author == "" {
-		genreInt, err := strconv.Atoi(genre)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
 		total = int(bookByGenreCache[Genre(genreInt)].Load())
 	} else {
 		err = tx.GetContext(c.Request().Context(), &total, query, args...)
@@ -803,7 +874,6 @@ func getBooksHandler(c echo.Context) error {
 	}
 
 	query = strings.ReplaceAll(query, "COUNT(*)", "*")
-	lastBookID := c.QueryParam("last_book_id")
 	if lastBookID != "" {
 		query += "AND `id` > ? "
 		args = append(args, lastBookID)
@@ -857,6 +927,117 @@ func getBooksHandler(c echo.Context) error {
 	_ = tx.Commit()
 
 	return c.JSON(http.StatusOK, res)
+}
+
+// 蔵書をタイトルで検索
+func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*GetBooksResponse, error) {
+	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE title_suffix LIKE ?"
+	booksQuery := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
+		"FROM `book` " +
+		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
+		"WHERE book_title_suffix.title_suffix LIKE ? AND `id` > ? " +
+		"ORDER BY book.id ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{}
+
+	if err := tx.GetContext(ctx, &resp.Total, countQuery, title); err != nil {
+		return nil, err
+	}
+	if resp.Total == 0 {
+		return &resp, nil
+	}
+
+	if err := tx.SelectContext(ctx, &resp.Books, booksQuery, title, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(resp.Books) == 0 {
+		return &resp, nil
+	}
+
+	_ = tx.Commit()
+	return &resp, err
+}
+
+// 指定したジャンルの蔵書一覧を取得
+func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (*GetBooksResponse, error) {
+	query := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
+		"FROM `book` " +
+		"WHERE genre = ? AND `id` > ? " +
+		"ORDER BY `id` ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{Total: int(bookByGenreCache[Genre(genre)].Load())}
+	if resp.Total == 0 {
+		return &resp, nil
+	}
+
+	if err := tx.SelectContext(ctx, &resp.Books, query, genre, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(resp.Books) == 0 {
+		return &resp, nil
+	}
+
+	_ = tx.Commit()
+	return &resp, err
+}
+
+// 蔵書をジャンルとタイトルで検索
+func getBooksByGenreTitle(ctx context.Context, genre int, title, lastID string, limit int) (*GetBooksResponse, error) {
+	countQuery := "SELECT COUNT(DISTINCT book.id) FROM book JOIN book_title_suffix ON book_title_suffix.book_id = book.id WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ?"
+	booksQuery := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
+		"FROM `book` " +
+		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
+		"WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ? AND book.id > ? " +
+		"ORDER BY book.id ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{}
+
+	if err := tx.GetContext(ctx, &resp.Total, countQuery, genre, title); err != nil {
+		return nil, err
+	}
+	if resp.Total == 0 {
+		return &resp, nil
+	}
+
+	if err := tx.SelectContext(ctx, &resp.Books, booksQuery, genre, title, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(resp.Books) == 0 {
+		return &resp, nil
+	}
+
+	_ = tx.Commit()
+	return &resp, err
 }
 
 type GetBookResponse struct {
