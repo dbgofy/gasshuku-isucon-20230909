@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,6 +27,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/uptrace-go/uptrace"
 	"golang.org/x/sync/errgroup"
@@ -79,7 +79,11 @@ func main() {
 	e.Debug = true
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		e.DefaultHTTPErrorHandler(err, c)
-		c.Logger().Error(err.Error(), "path", c.Path())
+		go c.Logger().Errorj(log.JSON{
+			"error":  err.Error(),
+			"method": c.Request().Method,
+			"path":   c.Path(),
+		})
 	}
 	e.Use(otelecho.Middleware("dev-1"))
 
