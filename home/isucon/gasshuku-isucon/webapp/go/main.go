@@ -924,7 +924,7 @@ func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*Get
 	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE title_suffix LIKE ?"
 	booksQuery := "SELECT " +
 		"book.*, " +
-		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
 		"FROM `book` " +
 		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
 		"WHERE book_title_suffix.title_suffix LIKE ? AND `id` > ? " +
@@ -962,7 +962,7 @@ func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*Get
 func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (*GetBooksResponse, error) {
 	query := "SELECT " +
 		"book.*, " +
-		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
 		"FROM `book` " +
 		"WHERE genre = ? AND `id` > ? " +
 		"ORDER BY `id` ASC LIMIT ?"
@@ -996,7 +996,7 @@ func getBooksByGenreTitle(ctx context.Context, genre int, title, lastID string, 
 	countQuery := "SELECT COUNT(DISTINCT book_title_suffix.book_id) FROM `book_title_suffix` JOIN `book` ON book.id = book_title_suffix.book_id WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ?"
 	booksQuery := "SELECT " +
 		"book.*, " +
-		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id LIMIT 1) AS `lending` " +
 		"FROM `book` " +
 		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
 		"WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ? AND book.id > ? " +
