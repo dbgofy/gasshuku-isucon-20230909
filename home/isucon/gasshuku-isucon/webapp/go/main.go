@@ -83,12 +83,22 @@ func main() {
 	e.Debug = true
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		e.DefaultHTTPErrorHandler(err, c)
-		go c.Logger().Errorj(log.JSON{
-			"error":  err.Error(),
-			"method": c.Request().Method,
-			"path":   c.Path(),
-			"params": c.QueryParams(),
-		})
+		go func() {
+			data := log.JSON{
+				"error":  err.Error(),
+				"method": c.Request().Method,
+				"path":   c.Path(),
+				"params": c.QueryParams(),
+			}
+			var httpErr *echo.HTTPError
+			if errors.As(err, &httpErr) {
+				if httpErr.Code < 500 {
+					c.Logger().Infoj(data)
+					return
+				}
+			}
+			c.Logger().Errorj(data)
+		}()
 	}
 	e.Use(otelecho.Middleware("dev-1"))
 
