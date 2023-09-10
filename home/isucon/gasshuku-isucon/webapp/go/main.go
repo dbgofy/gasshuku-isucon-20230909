@@ -83,6 +83,7 @@ func main() {
 			"error":  err.Error(),
 			"method": c.Request().Method,
 			"path":   c.Path(),
+			"params": c.QueryParams(),
 		})
 	}
 	e.Use(otelecho.Middleware("dev-1"))
