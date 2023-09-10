@@ -786,6 +786,21 @@ func getBooksHandler(c echo.Context) error {
 		return c.JSON(http.StatusOK, resp)
 	}
 
+	// ジャンルとタイトルを指定
+	if genre != "" && title != "" && author == "" {
+		resp, err := getBooksByGenreTitle(c.Request().Context(), genreInt, title, lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
+	}
+
 	tx, err := db.BeginTxx(c.Request().Context(), nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -888,8 +903,8 @@ func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*Get
 		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
 		"FROM `book` " +
 		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
-		"WHERE s.title_suffix LIKE ? AND `id` > ? " +
-		"ORDER BY `id` ASC LIMIT ?"
+		"WHERE book_title_suffix.title_suffix LIKE ? AND `id` > ? " +
+		"ORDER BY book.id ASC LIMIT ?"
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -942,6 +957,45 @@ func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (
 	}
 
 	if err := tx.SelectContext(ctx, &resp.Books, query, genre, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(resp.Books) == 0 {
+		return &resp, nil
+	}
+
+	_ = tx.Commit()
+	return &resp, err
+}
+
+// 蔵書をジャンルとタイトルで検索
+func getBooksByGenreTitle(ctx context.Context, genre int, title, lastID string, limit int) (*GetBooksResponse, error) {
+	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE genre = ? AND title_suffix LIKE ?"
+	booksQuery := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"FROM `book` " +
+		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
+		"WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ? AND book.id > ? " +
+		"ORDER BY book.id ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{}
+
+	if err := tx.GetContext(ctx, &resp.Total, countQuery, genre, title); err != nil {
+		return nil, err
+	}
+	if resp.Total == 0 {
+		return &resp, nil
+	}
+
+	if err := tx.SelectContext(ctx, &resp.Books, booksQuery, genre, title, lastID, limit); err != nil {
 		return nil, err
 	}
 	if len(resp.Books) == 0 {
