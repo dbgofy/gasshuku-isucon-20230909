@@ -758,9 +758,11 @@ func getBooksHandler(c echo.Context) error {
 	genre := c.QueryParam("genre")
 	lastBookID := c.QueryParam("last_book_id")
 
+	var err error
+
 	var genreInt int
 	if genre != "" {
-		genreInt, err := strconv.Atoi(genre)
+		genreInt, err = strconv.Atoi(genre)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
