@@ -897,8 +897,6 @@ func getBooksHandler(c echo.Context) error {
 
 // 蔵書をタイトルで検索
 func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*GetBooksResponse, error) {
-	time.Sleep(1 * time.Second)
-
 	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE title_suffix LIKE ?"
 	booksQuery := "SELECT " +
 		"book.*, " +
