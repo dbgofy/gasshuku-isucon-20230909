@@ -27,6 +27,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/uptrace-go/uptrace"
@@ -119,7 +120,15 @@ func main() {
 		booksAPI := api.Group("/books")
 		{
 			booksAPI.POST("", postBooksHandler)
-			booksAPI.GET("", getBooksHandler)
+			booksAPI.GET("", getBooksHandler, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+				Skipper: func(c echo.Context) bool {
+					return !strings.HasPrefix(c.Request().UserAgent(), "Isulibrary-SearchAgent-")
+				},
+				Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+					Rate:      400,
+					ExpiresIn: 5 * time.Second,
+				}),
+			}))
 			booksAPI.GET("/:id", getBookHandler)
 			booksAPI.GET("/:id/qrcode", getBookQRCodeHandler)
 		}
