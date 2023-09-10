@@ -976,7 +976,7 @@ func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (
 
 // 蔵書をジャンルとタイトルで検索
 func getBooksByGenreTitle(ctx context.Context, genre int, title, lastID string, limit int) (*GetBooksResponse, error) {
-	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE genre = ? AND title_suffix LIKE ?"
+	countQuery := "SELECT COUNT(DISTINCT book_title_suffix.book_id) FROM `book_title_suffix` JOIN `book` ON book.id = book_title_suffix.book_id WHERE book.genre = ? AND book_title_suffix.title_suffix LIKE ?"
 	booksQuery := "SELECT " +
 		"book.*, " +
 		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
