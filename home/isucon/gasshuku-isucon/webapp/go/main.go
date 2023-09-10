@@ -122,11 +122,11 @@ func main() {
 			booksAPI.POST("", postBooksHandler)
 			booksAPI.GET("", getBooksHandler, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 				Skipper: func(c echo.Context) bool {
-					return c.QueryParam("title") != ""
+					return !strings.HasPrefix(c.Request().UserAgent(), "Isulibrary-SearchAgent-")
 				},
 				Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-					Rate:      10,
-					ExpiresIn: 1 * time.Second,
+					Rate:      500,
+					ExpiresIn: 5 * time.Second,
 				}),
 			}))
 			booksAPI.GET("/:id", getBookHandler)
