@@ -736,6 +736,7 @@ func getBooksHandler(c echo.Context) error {
 	genre := c.QueryParam("genre")
 	lastBookID := c.QueryParam("last_book_id")
 
+	var genreInt int
 	if genre != "" {
 		genreInt, err := strconv.Atoi(genre)
 		if err != nil {
@@ -753,6 +754,21 @@ func getBooksHandler(c echo.Context) error {
 	pageStr := c.QueryParam("page")
 	if pageStr == "" {
 		pageStr = "1"
+	}
+
+	// ジャンルのみ指定
+	if genre != "" && title == "" && author == "" {
+		resp, err := getBooksByGenre(c.Request().Context(), genreInt, lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
 	}
 
 	// タイトルのみ指定
@@ -796,10 +812,6 @@ func getBooksHandler(c echo.Context) error {
 
 	var total int
 	if genre != "" && title == "" && author == "" {
-		genreInt, err := strconv.Atoi(genre)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-		}
 		total = int(bookByGenreCache[Genre(genreInt)].Load())
 	} else {
 		err = tx.GetContext(c.Request().Context(), &total, query, args...)
@@ -903,9 +915,40 @@ func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*Get
 		return &resp, nil
 	}
 
-	if err := tx.Commit(); err != nil {
+	_ = tx.Commit()
+	return &resp, err
+}
+
+// 指定したジャンルの蔵書一覧を取得
+func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (*GetBooksResponse, error) {
+	query := "SELECT " +
+		"book.*, " +
+		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
+		"FROM `book` " +
+		"WHERE genre = ? LIKE ? AND `id` > ? " +
+		"ORDER BY `id` ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{Total: int(bookByGenreCache[Genre(genre)].Load())}
+	if resp.Total == 0 {
+		return &resp, nil
+	}
+
+	if err := tx.SelectContext(ctx, &resp.Books, query, genre, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(resp.Books) == 0 {
+		return &resp, nil
+	}
+
+	_ = tx.Commit()
 	return &resp, err
 }
 
