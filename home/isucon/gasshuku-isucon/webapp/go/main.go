@@ -947,7 +947,7 @@ func getBooksByGenre(ctx context.Context, genre int, lastID string, limit int) (
 		"book.*, " +
 		"EXISTS(SELECT book_id FROM `lending` WHERE book_id = book.id) AS `lending` " +
 		"FROM `book` " +
-		"WHERE genre = ? LIKE ? AND `id` > ? " +
+		"WHERE genre = ? AND `id` > ? " +
 		"ORDER BY `id` ASC LIMIT ?"
 
 	tx, err := db.BeginTxx(ctx, nil)
