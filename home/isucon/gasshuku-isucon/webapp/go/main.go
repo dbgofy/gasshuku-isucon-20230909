@@ -9,10 +9,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/uptrace/opentelemetry-go-extra/otelsql"
-	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"net/http"
 	"os"
@@ -59,7 +55,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
 	var err error
-	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemKey.String("mysql:"+revision)))
+	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -81,27 +77,6 @@ func main() {
 	}
 
 	e := echo.New()
-	e.Debug = true
-	e.HTTPErrorHandler = func(err error, c echo.Context) {
-		e.DefaultHTTPErrorHandler(err, c)
-		go func() {
-			data := log.JSON{
-				"error":  err.Error(),
-				"method": c.Request().Method,
-				"path":   c.Path(),
-				"params": c.QueryParams(),
-			}
-			var httpErr *echo.HTTPError
-			if errors.As(err, &httpErr) {
-				if httpErr.Code < 500 {
-					c.Logger().Infoj(data)
-					return
-				}
-			}
-			c.Logger().Errorj(data)
-		}()
-	}
-	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
