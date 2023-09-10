@@ -99,3 +99,4 @@ fi
 #fi
 
 source /home/isucon/.gvm/scripts/gvm
+export UPTRACE_DSN=http://project2_secret_token@10.10.4.10:14317/2

@@ -22,4 +22,4 @@ wait
 date
 
 mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" < 3_index.sql
-mysql <<< 'ALTER INSTANCE ENABLE INNODB REDO_LOG; SET GLOBAL slow_query_log = 1;'
+mysql <<< 'ALTER INSTANCE ENABLE INNODB REDO_LOG;'
