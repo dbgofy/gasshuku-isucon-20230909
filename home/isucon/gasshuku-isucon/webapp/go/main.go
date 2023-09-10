@@ -773,7 +773,7 @@ func getBooksHandler(c echo.Context) error {
 
 	// タイトルのみ指定
 	if genre == "" && title != "" && author == "" {
-		resp, err := getBooksByTitle(c.Request().Context(), title, lastBookID, bookPageLimit)
+		resp, err := getBooksByTitle(c.Request().Context(), title+"%", lastBookID, bookPageLimit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -788,7 +788,7 @@ func getBooksHandler(c echo.Context) error {
 
 	// ジャンルとタイトルを指定
 	if genre != "" && title != "" && author == "" {
-		resp, err := getBooksByGenreTitle(c.Request().Context(), genreInt, title, lastBookID, bookPageLimit)
+		resp, err := getBooksByGenreTitle(c.Request().Context(), genreInt, title+"%", lastBookID, bookPageLimit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
