@@ -124,7 +124,10 @@ func main() {
 				Skipper: func(c echo.Context) bool {
 					return c.QueryParam("title") != ""
 				},
-				Store: middleware.NewRateLimiterMemoryStore(10),
+				Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+					Rate:      10,
+					ExpiresIn: 1 * time.Second,
+				}),
 			}))
 			booksAPI.GET("/:id", getBookHandler)
 			booksAPI.GET("/:id/qrcode", getBookQRCodeHandler)
