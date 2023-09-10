@@ -114,6 +114,7 @@
 0644:1001:1000:home/isucon/gasshuku-isucon/webapp/sql/1_data.sql
 0644:0:0:home/isucon/gasshuku-isucon/webapp/sql/2_book_author_suffix.sql.tar
 0644:0:0:home/isucon/gasshuku-isucon/webapp/sql/2_book_title_suffix.sql.tar
+0644:0:0:home/isucon/gasshuku-isucon/webapp/sql/3_index.sql
 0644:0:0:home/isucon/gasshuku-isucon/webapp/sql/init_db.sh
 0700:0:0:root
 0644:0:0:root/.bashrc
