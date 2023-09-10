@@ -125,7 +125,7 @@ func main() {
 					return !strings.HasPrefix(c.Request().UserAgent(), "Isulibrary-SearchAgent-")
 				},
 				Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-					Rate:      500,
+					Rate:      400,
 					ExpiresIn: 5 * time.Second,
 				}),
 			}))
