@@ -734,6 +734,8 @@ func getBooksHandler(c echo.Context) error {
 	title := c.QueryParam("title")
 	author := c.QueryParam("author")
 	genre := c.QueryParam("genre")
+	lastBookID := c.QueryParam("last_book_id")
+
 	if genre != "" {
 		genreInt, err := strconv.Atoi(genre)
 		if err != nil {
@@ -751,6 +753,21 @@ func getBooksHandler(c echo.Context) error {
 	pageStr := c.QueryParam("page")
 	if pageStr == "" {
 		pageStr = "1"
+	}
+
+	// タイトルのみ指定
+	if genre == "" && title != "" && author == "" {
+		resp, err := getBooksByTitle(c.Request().Context(), title, lastBookID, bookPageLimit)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if resp.Total == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books found")
+		}
+		if len(resp.Books) == 0 {
+			return echo.NewHTTPError(http.StatusNotFound, "no books to show in this page")
+		}
+		return c.JSON(http.StatusOK, resp)
 	}
 
 	tx, err := db.BeginTxx(c.Request().Context(), nil)
@@ -796,7 +813,6 @@ func getBooksHandler(c echo.Context) error {
 	}
 
 	query = strings.ReplaceAll(query, "COUNT(*)", "*")
-	lastBookID := c.QueryParam("last_book_id")
 	if lastBookID != "" {
 		query += "AND `id` > ? "
 		args = append(args, lastBookID)
@@ -850,6 +866,72 @@ func getBooksHandler(c echo.Context) error {
 	_ = tx.Commit()
 
 	return c.JSON(http.StatusOK, res)
+}
+
+// 蔵書をタイトルで検索
+func getBooksByTitle(ctx context.Context, title, lastID string, limit int) (*GetBooksResponse, error) {
+	countQuery := "SELECT COUNT(DISTINCT book_id) FROM `book_title_suffix` WHERE title_suffix LIKE ?"
+	booksQuery := "SELECT book.* FROM `book` " +
+		"JOIN `book_title_suffix` ON book_title_suffix.book_id = book.id " +
+		"WHERE s.title_suffix LIKE ? AND `id` > ? " +
+		"ORDER BY `id` ASC LIMIT ?"
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	resp := GetBooksResponse{}
+
+	if err := tx.GetContext(ctx, &resp.Total, countQuery, title); err != nil {
+		return nil, err
+	}
+	if resp.Total == 0 {
+		return nil, errors.New("no books found")
+	}
+
+	var books []Book
+	if err := tx.SelectContext(ctx, &books, booksQuery, title, lastID, limit); err != nil {
+		return nil, err
+	}
+	if len(books) == 0 {
+		return nil, errors.New("no books to show in this page")
+	}
+
+	bookIDs := make([]string, 0, len(books))
+	for _, book := range books {
+		bookIDs = append(bookIDs, book.ID)
+	}
+	var lendingBookIDs []string
+	lendingQuery, args, err := sqlx.In("SELECT book_id FROM `lending` WHERE `book_id` IN (?)", bookIDs)
+	if err != nil {
+		return nil, err
+	}
+	tx.Rebind(lendingQuery)
+	if err := tx.SelectContext(ctx, &lendingBookIDs, lendingQuery, args...); err != nil {
+		return nil, err
+	}
+	resBookIDsMap := make(map[string]struct{}, len(lendingBookIDs))
+	for _, resBookID := range lendingBookIDs {
+		resBookIDsMap[resBookID] = struct{}{}
+	}
+	for i, book := range books {
+		resp.Books[i].Book = book
+		_, ok := resBookIDsMap[book.ID]
+		if ok {
+			resp.Books[i].Lending = true
+		} else {
+			resp.Books[i].Lending = false
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &resp, err
 }
 
 type GetBookResponse struct {
