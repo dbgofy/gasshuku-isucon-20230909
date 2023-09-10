@@ -70,6 +70,10 @@ func main() {
 		log.Panic(err)
 	}
 
+	if err := updateCache(ctx); err != nil {
+		log.Panic(err)
+	}
+
 	block, err = aes.NewCipher([]byte(key))
 	if err != nil {
 		log.Panic(err)
@@ -266,6 +270,37 @@ func generateQRCode(id string) ([]byte, error) {
 	return io.ReadAll(file)
 }
 
+func updateCache(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var total int32
+		err := db.GetContext(ctx, &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+		if err != nil {
+			return err
+		}
+		notBannedMemberNum.Store(total)
+		return nil
+	})
+
+	g.Go(func() error {
+		var genreCounts []genreCount
+		err := db.SelectContext(ctx, &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+		if err != nil {
+			return err
+		}
+		bookByGenreCache = make([]*atomic.Int64, 10)
+		for _, genreCount := range genreCounts {
+			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
+			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
+		}
+		return nil
+	})
+
+	return g.Wait()
+
+}
+
 /*
 ---------------------------------------------------------------
 Initialization API
@@ -322,27 +357,7 @@ func initializeHandler(c echo.Context) error {
 	})
 
 	g.Go(func() error {
-		var total int32
-		err := db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
-		if err != nil {
-			return err
-		}
-		notBannedMemberNum.Store(total)
-		return nil
-	})
-
-	g.Go(func() error {
-		var genreCounts []genreCount
-		err := db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
-		if err != nil {
-			return err
-		}
-		bookByGenreCache = make([]*atomic.Int64, 10)
-		for _, genreCount := range genreCounts {
-			bookByGenreCache[genreCount.Genre] = new(atomic.Int64)
-			bookByGenreCache[genreCount.Genre].Store(genreCount.Count)
-		}
-		return nil
+		return updateCache(c.Request().Context())
 	})
 
 	if err := g.Wait(); err != nil {
