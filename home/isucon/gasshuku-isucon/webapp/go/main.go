@@ -28,7 +28,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/uptrace-go/uptrace"
 	"golang.org/x/sync/errgroup"
@@ -78,7 +77,10 @@ func main() {
 
 	e := echo.New()
 	e.Debug = true
-	e.Use(middleware.Logger())
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		e.DefaultHTTPErrorHandler(err, c)
+		c.Logger().Error(err.Error())
+	}
 	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
