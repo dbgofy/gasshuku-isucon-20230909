@@ -79,7 +79,7 @@ func main() {
 	e.Debug = true
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		e.DefaultHTTPErrorHandler(err, c)
-		c.Logger().Error(err.Error())
+		c.Logger().Error(err.Error(), "url", c.Request().URL)
 	}
 	e.Use(otelecho.Middleware("dev-1"))
 
