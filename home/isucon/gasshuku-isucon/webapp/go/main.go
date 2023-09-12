@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -13,6 +12,8 @@ import (
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"go.opentelemetry.io/otel/trace"
 	"io"
@@ -31,18 +32,24 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
-	"github.com/uptrace/opentelemetry-go-extra/otelplay"
 )
 
 var tracer trace.Tracer
 
 func main() {
-	ctx := context.Background()
+	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint())
+	if err != nil {
+		panic(err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(tp)
+
 	tracerProvider := otel.GetTracerProvider()
 	tracer = tracerProvider.Tracer("dev-1")
-
-	shutdown := otelplay.ConfigureOpentelemetry(ctx)
-	defer shutdown()
 
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
@@ -51,7 +58,6 @@ func main() {
 	name := getEnvOrDefault("DB_NAME", "isulibrary")
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
-	var err error
 	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
 	if err != nil {
 		log.Panic(err)
