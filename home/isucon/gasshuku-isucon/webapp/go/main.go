@@ -377,6 +377,18 @@ func initializeHandler(c echo.Context) error {
 		return updateCache(c.Request().Context())
 	})
 
+	g.Go(func() error {
+		task, err := meilisearchClient.DeleteIndex("books")
+		if err != nil {
+			return err
+		}
+		_, err = meilisearchClient.WaitForTask(task.TaskUID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
 	if err := g.Wait(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -387,16 +399,8 @@ func initializeHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		task, err := meilisearchClient.DeleteIndex("books")
-		if err != nil {
-			return err
-		}
-		_, err = meilisearchClient.WaitForTask(task.TaskUID)
-		if err != nil {
-			return err
-		}
 		index := meilisearchClient.Index("books")
-		task, err = index.AddDocuments(books)
+		task, err := index.AddDocuments(books)
 		if err != nil {
 			return err
 		}
