@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"log"
 	"net/http"
@@ -33,10 +34,12 @@ import (
 	"github.com/uptrace/opentelemetry-go-extra/otelplay"
 )
 
-var tracer = otel.Tracer("echo-server")
+var tracer trace.Tracer
 
 func main() {
 	ctx := context.Background()
+	tracerProvider := otel.GetTracerProvider()
+	tracer = tracerProvider.Tracer("dev-1")
 
 	shutdown := otelplay.ConfigureOpentelemetry(ctx)
 	defer shutdown()
@@ -69,7 +72,7 @@ func main() {
 	e := echo.New()
 	e.Debug = true
 	e.Use(middleware.Logger())
-	e.Use(otelecho.Middleware("dev-1"))
+	e.Use(otelecho.Middleware("dev-1", otelecho.WithTracerProvider(tracerProvider)))
 
 	api := e.Group("/api")
 	{
@@ -270,6 +273,9 @@ type genreCount struct {
 
 // 初期化用ハンドラ
 func initializeHandler(c echo.Context) error {
+	ctx, sp := tracer.Start(c.Request().Context(), "initializeHandler")
+	defer sp.End()
+
 	var req InitializeHandlerRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -286,7 +292,7 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	_, err = db.ExecContext(c.Request().Context(), "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
+	_, err = db.ExecContext(ctx, "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -297,14 +303,14 @@ func initializeHandler(c echo.Context) error {
 	}
 
 	var total int32
-	err = db.GetContext(c.Request().Context(), &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
+	err = db.GetContext(ctx, &total, "SELECT COUNT(*) FROM `member` WHERE `banned` = false")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	notBannedMemberNum.Store(total)
 
 	var genreCounts []genreCount
-	err = db.SelectContext(c.Request().Context(), &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
+	err = db.SelectContext(ctx, &genreCounts, "SELECT genre, count(1) as c FROM `book` GROUP BY genre order by genre")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
