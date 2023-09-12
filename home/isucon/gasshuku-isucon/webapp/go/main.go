@@ -12,7 +12,10 @@ import (
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	"io"
 	"log"
 	"net/http"
@@ -31,6 +34,8 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/opentelemetry-go-extra/otelplay"
 )
+
+var tracer = otel.Tracer("echo-server")
 
 func main() {
 	ctx := context.Background()
@@ -368,6 +373,9 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "getUser", oteltrace.WithAttributes(attribute.String("id", id)))
+	defer span.End()
+
 	var err error
 
 	lastMemberID := c.QueryParam("last_member_id")
@@ -379,7 +387,7 @@ func getMembersHandler(c echo.Context) error {
 
 	var lastMemberName string
 	if lastMemberID != "" && (order == "name_asc" || order == "name_desc") {
-		err = db.GetContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		err = db.GetContext(ctx, &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -414,9 +422,9 @@ func getMembersHandler(c echo.Context) error {
 
 	members := []Member{}
 	if filterString == "" {
-		err = db.SelectContext(c.Request().Context(), &members, query, memberPageLimit)
+		err = db.SelectContext(ctx, &members, query, memberPageLimit)
 	} else {
-		err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+		err = db.SelectContext(ctx, &members, query, filterString, memberPageLimit)
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
