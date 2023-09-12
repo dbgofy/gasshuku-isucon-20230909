@@ -401,16 +401,19 @@ func initializeHandler(c echo.Context) error {
 		}
 		println("select")
 		index := meilisearchClient.Index("books")
-		task, err := index.AddDocuments(books)
+		tasks, err := index.AddDocumentsInBatches(books, 1000)
 		if err != nil {
 			return err
 		}
 		println("insert task start")
-		_, err = meilisearchClient.WaitForTask(task.TaskUID)
-		if err != nil {
-			return err
+		for _, task := range tasks {
+			_, err = meilisearchClient.WaitForTask(task.TaskUID)
+			if err != nil {
+				return err
+			}
 		}
 		println("insert task end")
+
 		return nil
 	}(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
