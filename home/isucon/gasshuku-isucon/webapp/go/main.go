@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -8,10 +9,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/labstack/echo-contrib/jaegertracing"
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"log"
@@ -29,9 +30,16 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/oklog/ulid/v2"
+	"github.com/uptrace/opentelemetry-go-extra/otelplay"
 )
 
+var tracer = otel.Tracer("echo-server")
+
 func main() {
+	ctx := context.Background()
+
+	shutdown := otelplay.ConfigureOpentelemetry(ctx)
+	defer shutdown()
 
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
@@ -59,9 +67,6 @@ func main() {
 	}
 
 	e := echo.New()
-	c := jaegertracing.New(e, nil)
-	defer c.Close()
-
 	e.Debug = true
 	e.Use(middleware.Logger())
 	e.Use(otelecho.Middleware("dev-1"))
@@ -366,6 +371,9 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
+	ctx, span := tracer.Start(c.Request().Context(), "getMembersHandler")
+	defer span.End()
+
 	var err error
 
 	lastMemberID := c.QueryParam("last_member_id")
@@ -377,7 +385,7 @@ func getMembersHandler(c echo.Context) error {
 
 	var lastMemberName string
 	if lastMemberID != "" && (order == "name_asc" || order == "name_desc") {
-		err = db.GetContext(c.Request().Context(), &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
+		err = db.GetContext(ctx, &lastMemberName, "SELECT `name` FROM `member` WHERE `id` = ?", lastMemberID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
@@ -412,9 +420,9 @@ func getMembersHandler(c echo.Context) error {
 
 	members := []Member{}
 	if filterString == "" {
-		err = db.SelectContext(c.Request().Context(), &members, query, memberPageLimit)
+		err = db.SelectContext(ctx, &members, query, memberPageLimit)
 	} else {
-		err = db.SelectContext(c.Request().Context(), &members, query, filterString, memberPageLimit)
+		err = db.SelectContext(ctx, &members, query, filterString, memberPageLimit)
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
