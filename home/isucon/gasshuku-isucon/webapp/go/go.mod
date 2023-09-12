@@ -14,19 +14,26 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
+	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
+	github.com/josharian/intern v1.0.0 // indirect
+	github.com/klauspost/compress v1.15.6 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/meilisearch/meilisearch-go v0.25.0 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.2 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelsqlx v0.2.2 // indirect
 	github.com/uptrace/uptrace-go v1.16.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.37.1-0.20220607072126-8a320890c08d // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.42.0 // indirect
 	go.opentelemetry.io/otel v1.17.0 // indirect

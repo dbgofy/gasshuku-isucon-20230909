@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -63,6 +64,11 @@ func main() {
 		log.Panic(err)
 	}
 	defer db.Close()
+
+	meilisearchClient = meilisearch.NewClient(meilisearch.ClientConfig{
+		Host:   "http://127.0.0.1:7700",
+		APIKey: "masterKey",
+	})
 
 	var key string
 	err = db.Get(&key, "SELECT `key` FROM `key` WHERE `id` = (SELECT MAX(`id`) FROM `key`)")
@@ -198,6 +204,7 @@ func generateID() string {
 }
 
 var db *sqlx.DB
+var meilisearchClient *meilisearch.Client
 
 func getEnvOrDefault(key string, defaultValue string) string {
 	val := os.Getenv(key)
@@ -371,6 +378,26 @@ func initializeHandler(c echo.Context) error {
 	})
 
 	if err := g.Wait(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if err := func() error {
+		var books []Book
+		err := db.SelectContext(c.Request().Context(), &books, "SELECT * FROM `book`")
+		if err != nil {
+			return err
+		}
+		index := meilisearchClient.Index("books")
+		task, err := index.AddDocuments(books)
+		if err != nil {
+			return err
+		}
+		_, err = meilisearchClient.WaitForTask(task.TaskUID)
+		if err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
