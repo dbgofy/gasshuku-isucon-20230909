@@ -399,20 +399,17 @@ func initializeHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		println("select")
 		index := meilisearchClient.Index("books")
-		tasks, err := index.AddDocumentsInBatches(books, 1000)
+		tasks, err := index.AddDocumentsInBatches(books, 10)
 		if err != nil {
 			return err
 		}
-		println("insert task start")
 		for _, task := range tasks {
 			_, err = meilisearchClient.WaitForTask(task.TaskUID)
 			if err != nil {
 				return err
 			}
 		}
-		println("insert task end")
 
 		return nil
 	}(); err != nil {
