@@ -41,9 +41,7 @@ var tracer trace.Tracer
 func main() {
 	ctx := context.Background()
 
-	endpoint := os.Getenv("EXPORTER_ENDPOINT")
-
-	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint())
 	if err != nil {
 		panic(err)
 	}
