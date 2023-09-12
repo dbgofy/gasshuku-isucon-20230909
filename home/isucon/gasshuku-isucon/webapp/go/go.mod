@@ -12,6 +12,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/uptrace/opentelemetry-go-extra/otelsql v0.2.2
 	github.com/uptrace/opentelemetry-go-extra/otelsqlx v0.2.2
+	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.43.0
 	go.opentelemetry.io/otel v1.17.0
 )
 
