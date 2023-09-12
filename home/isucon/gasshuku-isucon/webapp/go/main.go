@@ -387,8 +387,7 @@ func initializeHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		index := meilisearchClient.Index("books")
-		task, err := index.DeleteAllDocuments()
+		task, err := meilisearchClient.DeleteIndex("books")
 		if err != nil {
 			return err
 		}
@@ -396,6 +395,7 @@ func initializeHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
+		index := meilisearchClient.Index("books")
 		task, err = index.AddDocuments(books)
 		if err != nil {
 			return err
