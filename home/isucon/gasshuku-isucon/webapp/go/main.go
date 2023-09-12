@@ -388,7 +388,15 @@ func initializeHandler(c echo.Context) error {
 			return err
 		}
 		index := meilisearchClient.Index("books")
-		task, err := index.AddDocuments(books)
+		task, err := index.DeleteAllDocuments()
+		if err != nil {
+			return err
+		}
+		_, err = meilisearchClient.WaitForTask(task.TaskUID)
+		if err != nil {
+			return err
+		}
+		task, err = index.AddDocuments(books)
 		if err != nil {
 			return err
 		}
