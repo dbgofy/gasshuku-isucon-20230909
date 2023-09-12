@@ -11,7 +11,6 @@ import (
 	"github.com/labstack/echo-contrib/jaegertracing"
 	"github.com/uptrace/opentelemetry-go-extra/otelsql"
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"io"
 	"log"
@@ -64,7 +63,6 @@ func main() {
 
 	e.Debug = true
 	e.Use(middleware.Logger())
-	e.Use(otelecho.Middleware("dev-1"))
 
 	api := e.Group("/api")
 	{
@@ -666,6 +664,9 @@ type GetBooksResponse struct {
 
 // 蔵書を検索
 func getBooksHandler(c echo.Context) error {
+	sp := jaegertracing.CreateChildSpan(c, "getBooksHandler")
+	defer sp.Finish()
+
 	title := c.QueryParam("title")
 	author := c.QueryParam("author")
 	genre := c.QueryParam("genre")
