@@ -13,9 +13,7 @@ import (
 	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	"io"
 	"log"
 	"net/http"
@@ -373,7 +371,7 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
-	ctx, span := tracer.Start(c.Request().Context(), "getUser", oteltrace.WithAttributes(attribute.String("id", id)))
+	ctx, span := tracer.Start(c.Request().Context(), "getMembersHandler")
 	defer span.End()
 
 	var err error
