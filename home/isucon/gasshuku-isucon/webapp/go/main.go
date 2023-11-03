@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/newrelic/go-agent/v3/newrelic"
+	"github.com/oklog/ulid/v2"
 	"io"
 	"log"
 	"net/http"
@@ -23,10 +25,21 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/oklog/ulid/v2"
+	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
 )
 
 func main() {
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName(os.Getenv("NEW_RELIC_APP_NAME")),
+		newrelic.ConfigLicense(os.Getenv("NEW_RELIC_LICENSE_KEY")),
+		newrelic.ConfigAppLogEnabled(false),
+	)
+	if err != nil {
+		log.Fatalf("failed to init newrelic NewApplication reason: %v", err)
+	} else {
+		fmt.Println("newrelic init success")
+	}
+
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
 	user := getEnvOrDefault("DB_USER", "isucon")
@@ -34,7 +47,6 @@ func main() {
 	name := getEnvOrDefault("DB_NAME", "isulibrary")
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
-	var err error
 	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
@@ -55,6 +67,7 @@ func main() {
 	e := echo.New()
 	e.Debug = true
 	e.Use(middleware.Logger())
+	e.Use(nrecho.Middleware(app))
 
 	api := e.Group("/api")
 	{
