@@ -34,7 +34,8 @@ func main() {
 	name := getEnvOrDefault("DB_NAME", "isulibrary")
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
-	db, err := sqlx.Open("mysql", dsn)
+	var err error
+	db, err = sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
 	}
