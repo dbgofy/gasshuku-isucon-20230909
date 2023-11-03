@@ -254,9 +254,6 @@ type genreCount struct {
 
 // 初期化用ハンドラ
 func initializeHandler(c echo.Context) error {
-	ctx, sp := tracer.Start(c.Request().Context(), "initializeHandler")
-	defer sp.End()
-
 	var req InitializeHandlerRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -273,6 +270,7 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
+	ctx := c.Request().Context()
 	_, err = db.ExecContext(ctx, "INSERT INTO `key` (`key`) VALUES (?)", req.Key)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -358,9 +356,7 @@ type GetMembersResponse struct {
 
 // 会員一覧を取得 (ページネーションあり)
 func getMembersHandler(c echo.Context) error {
-	ctx, span := tracer.Start(c.Request().Context(), "getMembersHandler")
-	defer span.End()
-
+	ctx := c.Request().Context()
 	var err error
 
 	lastMemberID := c.QueryParam("last_member_id")
