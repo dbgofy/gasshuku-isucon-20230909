@@ -8,14 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/uptrace/opentelemetry-go-extra/otelsql"
-	"github.com/uptrace/opentelemetry-go-extra/otelsqlx"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"log"
 	"net/http"
@@ -34,23 +26,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-var tracer trace.Tracer
-
 func main() {
-	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint())
-	if err != nil {
-		panic(err)
-	}
-
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-	)
-	otel.SetTracerProvider(tp)
-
-	tracerProvider := otel.GetTracerProvider()
-	tracer = tracerProvider.Tracer("dev-1")
-
 	host := getEnvOrDefault("DB_HOST", "localhost")
 	port := getEnvOrDefault("DB_PORT", "3306")
 	user := getEnvOrDefault("DB_USER", "isucon")
@@ -58,7 +34,7 @@ func main() {
 	name := getEnvOrDefault("DB_NAME", "isulibrary")
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=Asia%%2FTokyo", user, pass, host, port, name)
 
-	db, err = otelsqlx.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
+	db, err := sqlx.Open("mysql", dsn)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -78,7 +54,6 @@ func main() {
 	e := echo.New()
 	e.Debug = true
 	e.Use(middleware.Logger())
-	e.Use(otelecho.Middleware("dev-1", otelecho.WithTracerProvider(tracerProvider)))
 
 	api := e.Group("/api")
 	{
